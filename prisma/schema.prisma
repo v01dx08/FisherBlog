@@ -1,0 +1,240 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  INFLUENCER
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum PostVisibility {
+  PUBLIC
+  UNLISTED
+  PRIVATE
+}
+
+model User {
+  id                 String     @id @default(uuid())
+  username           String     @unique
+  usernameNormalized String     @unique
+  email              String     @unique
+  emailNormalized    String     @unique
+  password           String
+  role               UserRole   @default(INFLUENCER)
+  status             UserStatus @default(ACTIVE)
+  sessionVersion     Int        @default(0)
+  displayName        String?
+  avatarUrl          String?
+  bio                String?
+  location           String?
+  fishingStyle       String?
+  youtubeUrl         String?
+  tiktokUrl          String?
+  facebookUrl        String?
+  instagramUrl       String?
+  isProfileCompleted Boolean    @default(false)
+  hideLocation       Boolean    @default(false)
+  notifyInteractions Boolean    @default(true)
+  createdAt          DateTime   @default(now())
+  posts              Post[]
+  comments           Comment[]
+  likes              Like[]
+  bookmarks          Bookmark[]
+
+  followers Follow[] @relation("following")
+  following Follow[] @relation("follower")
+
+  notifications      Notification[] @relation("notificationOwner")
+  actedNotifications Notification[] @relation("notificationActor")
+
+  sentMessages      Message[]
+  conversationLinks ConversationParticipant[]
+  auditLogs         AuditLog[]                @relation("auditActor")
+  mediaAssets       MediaAsset[]
+
+  @@index([createdAt])
+}
+
+model Post {
+  id            String            @id @default(uuid())
+  content       String
+  imageUrl      String?
+  videoUrl      String?
+  authorId      String
+  author        User              @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  comments      Comment[]
+  likes         Like[]
+  bookmarks     Bookmark[]
+  notifications Notification[]
+  mediaAssets   MediaAsset[]
+  publications  PostPublication[]
+  visibility    PostVisibility    @default(PUBLIC)
+  species       String?
+  weightKg      Float?
+  spotName      String?
+  proofHash     String            @unique
+  proofIssuedAt DateTime          @default(now())
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@index([authorId, createdAt])
+  @@index([visibility, createdAt])
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  content   String
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([postId, createdAt])
+}
+
+model Like {
+  id        String   @id @default(uuid())
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([postId, userId])
+  @@index([userId, createdAt])
+}
+
+model Bookmark {
+  id        String   @id @default(uuid())
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([postId, userId])
+  @@index([userId, createdAt])
+}
+
+model Follow {
+  id          String   @id @default(uuid())
+  followerId  String
+  follower    User     @relation("follower", fields: [followerId], references: [id], onDelete: Cascade)
+  followingId String
+  following   User     @relation("following", fields: [followingId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+
+  @@unique([followerId, followingId])
+  @@index([followingId, createdAt])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation("notificationOwner", fields: [userId], references: [id], onDelete: Cascade)
+  type      String // like, comment, follow, system
+  actorId   String?
+  actor     User?    @relation("notificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  postId    String?
+  post      Post?    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  content   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead, createdAt])
+}
+
+model Conversation {
+  id           String                    @id @default(uuid())
+  participants ConversationParticipant[]
+  messages     Message[]
+  updatedAt    DateTime                  @default(now())
+  createdAt    DateTime                  @default(now())
+
+  @@index([updatedAt])
+}
+
+model ConversationParticipant {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([userId])
+}
+
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  content        String
+  isRead         Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
+  @@index([senderId, createdAt])
+}
+
+model LoginThrottle {
+  key          String    @id
+  attempts     Int       @default(0)
+  blockedUntil DateTime?
+  updatedAt    DateTime  @updatedAt
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  actorId   String?
+  actor     User?    @relation("auditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  action    String
+  target    String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([actorId, createdAt])
+  @@index([action, createdAt])
+}
+
+model MediaAsset {
+  id        String   @id @default(uuid())
+  filename  String   @unique
+  mimeType  String
+  size      Int
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  postId    String?
+  post      Post?    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([ownerId, createdAt])
+  @@index([postId])
+}
+
+model PostPublication {
+  id          String    @id @default(uuid())
+  postId      String
+  post        Post      @relation(fields: [postId], references: [id], onDelete: Cascade)
+  platform    String
+  url         String
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([postId, url])
+  @@index([postId, createdAt])
+}

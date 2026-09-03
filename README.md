@@ -1,36 +1,80 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# FishViet
 
-## Getting Started
+Nền tảng FishViet.vn dành cho influencer câu cá đăng bản gốc trước khi phát hành lên mạng xã hội khác. Mỗi bài viết có dấu thời gian và fingerprint SHA-256 để đối chiếu lịch sử nội dung.
 
-First, run the development server:
+## Chạy production bằng Docker
+
+1. Sao chép `.env.example` thành `.env`.
+2. Thay toàn bộ giá trị `CHANGE_ME` bằng secret mạnh.
+3. Chạy:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+docker compose up --build -d
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+4. Mở `http://localhost:3000`.
+5. Kiểm tra trạng thái:
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+```bash
+docker compose ps
+curl http://localhost:3000/api/health
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Container web tự chạy Prisma migrations và chỉ tạo tài khoản admin khi DB chưa có admin. Seed demo không chạy trong production.
 
-## Learn More
+## Phát triển local
 
-To learn more about Next.js, take a look at the following resources:
+PostgreSQL cần chạy trước:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+docker compose up -d database
+npm install
+npx prisma migrate deploy
+npm run dev
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Kiểm tra
 
-## Deploy on Vercel
+```bash
+npm run lint
+npm test
+npm run build
+npm run test:smoke
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+`test:smoke` cần app đang chạy tại `http://localhost:3000`. Có thể đổi URL bằng `SMOKE_BASE_URL`.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Dữ liệu và backup
+
+- PostgreSQL: Docker volume `fisherblog_postgres_data`.
+- Media: Docker volume `fisherblog_uploads_data`.
+- Backup DB:
+
+```bash
+docker compose exec -T database pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" > fisherblog.sql
+```
+
+- Restore DB vào môi trường trống:
+
+```bash
+docker compose exec -T database psql -U "$POSTGRES_USER" "$POSTGRES_DB" < fisherblog.sql
+```
+
+Backup cả media volume trước mỗi release có thay đổi storage.
+
+## Deploy
+
+- Đặt reverse proxy TLS trước port `3000`.
+- Không expose PostgreSQL ra Internet. Mapping hiện tại chỉ bind `127.0.0.1` để hỗ trợ development.
+- Dùng volume bền vững. Nếu chạy nhiều web replica, thay local upload adapter bằng S3/R2.
+- Đặt `NEXT_PUBLIC_APP_URL` thành URL HTTPS chính thức.
+- Điền tên pháp nhân, địa chỉ và mã số thuế qua `NEXT_PUBLIC_LEGAL_ENTITY_*` trước khi mở dịch vụ.
+- Tạo và giám sát hộp thư `legal@fishviet.vn`, `privacy@fishviet.vn` trước khi công bố chính sách.
+- Rotate `JWT_SECRET` sẽ đăng xuất toàn bộ phiên hiện tại.
+
+ ## Tài khoản admin test
+
+  - Username: fishviet_admin
+  - Email: admin.test@fishviet.vn
+  - Password: FishViet@Test2026!
+
