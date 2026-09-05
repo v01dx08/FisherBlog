@@ -2,12 +2,14 @@ import { db } from "@/lib/db"
 import { requireUser } from "@/lib/auth"
 import { error, handleRouteError, json } from "@/lib/http"
 import { assertSameOrigin } from "@/lib/security"
+import { enforceRateLimit } from "@/lib/rate-limit"
 
 export async function POST(request, { params }) {
   try {
     assertSameOrigin(request)
     const { id } = await params
     const user = await requireUser(request)
+    await enforceRateLimit(request, { scope: "posts.like", actorId: user.id, limit: 120, windowMs: 5 * 60 * 1000 })
     const post = await db.post.findUnique({
       where: { id },
       select: { authorId: true, visibility: true, author: { select: { notifyInteractions: true } } },
@@ -35,7 +37,7 @@ export async function POST(request, { params }) {
               type: "like",
               actorId: user.id,
               postId: id,
-              content: `${actorName} đã thả tim nhật ký của bạn.`,
+              content: `${actorName} đã thả cá nhật ký của bạn.`,
             },
           })
         }
@@ -45,6 +47,6 @@ export async function POST(request, { params }) {
     const likeCount = await db.like.count({ where: { postId: id } })
     return json({ liked, likeCount })
   } catch (caught) {
-    return handleRouteError("posts.like", caught)
+    return handleRouteError("posts.like", caught, request)
   }
 }

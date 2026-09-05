@@ -1,16 +1,20 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { X, ChevronLeft, ChevronRight, Play, Maximize2 } from "lucide-react"
 
 export function MediaGrid({ items = [] }) {
   const [lightboxIndex, setLightboxIndex] = useState(null)
   const [loadedMap, setLoadedMap] = useState({})
+  const closeButtonRef = useRef(null)
 
   // Keyboard navigation for lightbox
   useEffect(() => {
     if (lightboxIndex === null) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = "hidden"
+    closeButtonRef.current?.focus()
     const handleKeyDown = (e) => {
       if (e.key === "Escape") setLightboxIndex(null)
       if (e.key === "ArrowLeft") {
@@ -21,7 +25,10 @@ export function MediaGrid({ items = [] }) {
       }
     }
     window.addEventListener("keydown", handleKeyDown)
-    return () => window.removeEventListener("keydown", handleKeyDown)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener("keydown", handleKeyDown)
+    }
   }, [lightboxIndex, items.length])
 
   if (!items || items.length === 0) return null
@@ -38,10 +45,12 @@ export function MediaGrid({ items = [] }) {
     const isLoaded = !!loadedMap[index]
 
     return (
-      <div
+      <button
+        type="button"
+        aria-label={`Mở media ${index + 1} trong ${count}`}
         key={index}
         onClick={() => setLightboxIndex(index)}
-        className={`relative overflow-hidden bg-muted cursor-pointer group select-none ${className}`}
+        className={`relative overflow-hidden bg-muted cursor-pointer group select-none text-left ${className}`}
       >
         {!isLoaded && !isVideo && (
           <div className="absolute inset-0 skeleton-shimmer z-0" />
@@ -82,7 +91,7 @@ export function MediaGrid({ items = [] }) {
             +{overlayCount}
           </div>
         )}
-      </div>
+      </button>
     )
   }
 
@@ -139,6 +148,9 @@ export function MediaGrid({ items = [] }) {
       <AnimatePresence>
         {lightboxIndex !== null && (
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Trình xem media"
             className="fixed inset-0 z-50 bg-black/95 backdrop-blur-md flex flex-col justify-between"
             onClick={() => setLightboxIndex(null)}
           >
@@ -151,6 +163,9 @@ export function MediaGrid({ items = [] }) {
                 {lightboxIndex + 1} / {items.length}
               </span>
               <button
+                ref={closeButtonRef}
+                type="button"
+                aria-label="Đóng trình xem media"
                 onClick={() => setLightboxIndex(null)}
                 className="p-2 rounded-full hover:bg-white/10 transition-colors text-white"
               >
@@ -166,6 +181,8 @@ export function MediaGrid({ items = [] }) {
               {/* Prev Button */}
               {items.length > 1 && (
                 <button
+                  type="button"
+                  aria-label="Media trước"
                   onClick={(e) => {
                     e.stopPropagation()
                     setLightboxIndex((prev) => (prev > 0 ? prev - 1 : items.length - 1))
@@ -205,6 +222,8 @@ export function MediaGrid({ items = [] }) {
               {/* Next Button */}
               {items.length > 1 && (
                 <button
+                  type="button"
+                  aria-label="Media tiếp theo"
                   onClick={(e) => {
                     e.stopPropagation()
                     setLightboxIndex((prev) => (prev < items.length - 1 ? prev + 1 : 0))
@@ -226,6 +245,8 @@ export function MediaGrid({ items = [] }) {
                   const url = typeof item === "string" ? item : item.url
                   return (
                     <button
+                      type="button"
+                      aria-label={`Xem media ${i + 1}`}
                       key={i}
                       onClick={() => setLightboxIndex(i)}
                       className={`h-12 w-16 rounded-lg overflow-hidden shrink-0 transition-all ${
@@ -234,7 +255,7 @@ export function MediaGrid({ items = [] }) {
                           : "opacity-40 hover:opacity-80"
                       }`}
                     >
-                      <img src={url} alt="Thumbnail" className="w-full h-full object-cover" />
+                      <img src={url} alt="" className="w-full h-full object-cover" />
                     </button>
                   )
                 })}

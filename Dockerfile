@@ -8,7 +8,7 @@ RUN apk add --no-cache libc6-compat openssl
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci --ignore-scripts
+RUN --mount=type=cache,target=/root/.npm npm ci --ignore-scripts --prefer-offline --no-audit --no-fund
 
 # Rebuild the source code only when needed
 FROM base AS builder
@@ -24,7 +24,17 @@ RUN npx prisma generate
 ENV NEXT_TELEMETRY_DISABLED 1
 RUN npm run build
 
-# Production image, copy all the files and run next
+FROM base AS migrator
+RUN apk add --no-cache openssl
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma/client ./node_modules/@prisma/client
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/package.json ./package.json
+CMD ["sh", "-c", "npx prisma migrate deploy && node prisma/bootstrap.js"]
+
+# Production image contains only traced runtime files.
 FROM base AS runner
 RUN apk add --no-cache openssl
 WORKDIR /app
@@ -34,11 +44,6 @@ ENV NEXT_TELEMETRY_DISABLED 1
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
-
-# Runtime dependencies and migration files
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package.json ./package.json
 
 COPY --from=builder /app/public ./public
 
@@ -59,4 +64,4 @@ EXPOSE 3000
 ENV PORT 3000
 ENV HOSTNAME "0.0.0.0"
 
-CMD ["sh", "-c", "npx prisma migrate deploy && node prisma/bootstrap.js && node server.js"]
+CMD ["node", "server.js"]

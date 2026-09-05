@@ -2,7 +2,8 @@
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Lock, User, Fish, Waves, AlertCircle } from "lucide-react"
+import { Lock, User, Waves, AlertCircle } from "lucide-react"
+import Image from "next/image"
 import { motion } from "framer-motion"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useState, Suspense } from "react"
@@ -68,10 +69,8 @@ function LoginForm() {
       className="w-full max-w-md"
     >
       <div className="lg:hidden flex items-center gap-2.5 mb-10">
-        <div className="h-10 w-10 rounded-xl bg-primary flex items-center justify-center">
-          <Fish className="h-5 w-5 text-primary-foreground" />
-        </div>
-        <span className="text-xl font-bold tracking-tight">Nhật ký <span className="text-primary">ngày đi câu</span></span>
+        <Image src="/fishviet-logo-192.png" width={40} height={40} alt="Logo Nhật ký ngày đi câu" className="h-10 w-10 rounded-xl object-cover ring-1 ring-primary/15" />
+        <span className="text-xl font-bold tracking-tight">Ngày <span className="text-primary">đi câu</span></span>
       </div>
 
       <h1 className="text-3xl font-bold mb-2">Chào mừng trở lại</h1>
@@ -129,7 +128,7 @@ function LoginForm() {
 
       <div className="mt-8 pt-6 border-t border-border/40">
         <p className="text-sm text-muted-foreground text-center">
-          Tài khoản được cấp bởi quản trị viên FishViet.
+          Tài khoản được cấp bởi quản trị viên Nhật ký ngày đi câu.
           <br />
           <a href="/legal" className="text-primary hover:underline">Đọc Điều khoản và Chính sách Quyền riêng tư</a>
         </p>
@@ -165,10 +164,8 @@ export default function LoginPage() {
             transition={{ duration: 0.8, ease: [0.25, 0.46, 0.45, 0.94] }}
           >
             <div className="flex items-center gap-3 mb-8">
-              <div className="h-14 w-14 rounded-2xl bg-white/15 backdrop-blur-sm flex items-center justify-center">
-                <Fish className="h-7 w-7 text-white" />
-              </div>
-              <h1 className="text-3xl font-bold tracking-tight">FishViet</h1>
+              <Image src="/fishviet-logo-192.png" width={56} height={56} alt="Logo Nhật ký ngày đi câu" className="h-14 w-14 rounded-2xl object-cover shadow-xl ring-1 ring-white/25" />
+              <h1 className="text-3xl font-bold tracking-tight">Nhật ký ngày đi câu</h1>
             </div>
 
             <h2 className="text-4xl xl:text-5xl font-bold leading-tight mb-6">

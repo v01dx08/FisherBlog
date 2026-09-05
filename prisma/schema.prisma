@@ -83,6 +83,8 @@ model Post {
   weightKg      Float?
   spotName      String?
   proofHash     String            @unique
+  proofVersion  Int               @default(1)
+  proofPayload  Json?
   proofIssuedAt DateTime          @default(now())
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
@@ -215,6 +217,7 @@ model MediaAsset {
   filename  String   @unique
   mimeType  String
   size      Int
+  sha256    String?
   ownerId   String
   owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   postId    String?
@@ -223,6 +226,15 @@ model MediaAsset {
 
   @@index([ownerId, createdAt])
   @@index([postId])
+}
+
+model RateLimit {
+  key       String   @id
+  count     Int      @default(0)
+  resetAt   DateTime
+  updatedAt DateTime @updatedAt
+
+  @@index([resetAt])
 }
 
 model PostPublication {

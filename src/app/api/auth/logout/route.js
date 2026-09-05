@@ -8,6 +8,6 @@ export async function POST(request) {
     await clearSessionCookie();
     return json({ success: true, message: "Đã đăng xuất thành công" });
   } catch (error) {
-    return handleRouteError("auth.logout", error);
+    return handleRouteError("auth.logout", error, request);
   }
 }

@@ -29,6 +29,8 @@
 }
 
 :root {
+  --font-geist-sans: "Aptos", "Segoe UI Variable Display", "Trebuchet MS", sans-serif;
+  --font-geist-mono: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
   --background: #edf4fb;
   --foreground: #10233c;
   --card: #ffffff;

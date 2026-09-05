@@ -32,10 +32,10 @@ export async function GET(req) {
 
     const tagCountMap = {};
     const allPosts = await db.post.findMany({
-      where: { visibility: "PUBLIC" },
+      where: { visibility: "PUBLIC", content: { contains: q, mode: "insensitive" } },
       select: { content: true },
       orderBy: { createdAt: "desc" },
-      take: 5000,
+      take: 500,
     });
 
     for (const post of allPosts) {
@@ -69,6 +69,6 @@ export async function GET(req) {
         tags: matchingTags,
     });
   } catch (caught) {
-    return handleRouteError("search", caught);
+    return handleRouteError("search", caught, req);
   }
 }

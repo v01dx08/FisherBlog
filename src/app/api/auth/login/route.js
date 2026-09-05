@@ -84,6 +84,6 @@ export async function POST(req) {
       },
     });
   } catch (error) {
-    return handleRouteError("auth.login", error);
+    return handleRouteError("auth.login", error, req);
   }
 }

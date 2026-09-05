@@ -2,6 +2,7 @@ import { db } from "@/lib/db"
 import { requireUser } from "@/lib/auth"
 import { error, handleRouteError, json, readJson } from "@/lib/http"
 import { assertSameOrigin, cleanText, validateUsername } from "@/lib/security"
+import { enforceRateLimit } from "@/lib/rate-limit"
 
 const userSelect = {
   id: true,
@@ -27,15 +28,21 @@ export async function GET(request) {
       take: 50,
     })
 
-    const items = await Promise.all(
-      conversations.map(async (conversation) => {
-        const unread = await db.message.count({
+    const unreadGroups = conversations.length
+      ? await db.message.groupBy({
+          by: ["conversationId"],
           where: {
-            conversationId: conversation.id,
+            conversationId: { in: conversations.map((conversation) => conversation.id) },
             isRead: false,
             senderId: { not: user.id },
           },
+          _count: { _all: true },
         })
+      : []
+    const unreadByConversation = new Map(
+      unreadGroups.map((group) => [group.conversationId, group._count._all])
+    )
+    const items = conversations.map((conversation) => {
         const otherUser = conversation.participants.find((item) => item.userId !== user.id)?.user
         const lastMessage = conversation.messages[0]
         return {
@@ -48,15 +55,14 @@ export async function GET(request) {
                 createdAt: lastMessage.createdAt,
               }
             : null,
-          unread,
+          unread: unreadByConversation.get(conversation.id) || 0,
           updatedAt: conversation.updatedAt,
         }
       })
-    )
 
     return json(items)
   } catch (caught) {
-    return handleRouteError("messages.list", caught)
+    return handleRouteError("messages.list", caught, request)
   }
 }
 
@@ -64,6 +70,7 @@ export async function POST(request) {
   try {
     assertSameOrigin(request)
     const user = await requireUser(request)
+    await enforceRateLimit(request, { scope: "messages.send", actorId: user.id, limit: 120, windowMs: 10 * 60 * 1000 })
     const body = await readJson(request, 8_192)
     const content = cleanText(body.content, { name: "Tin nhắn", min: 1, max: 2_000 })
     let conversationId = body.conversationId ? String(body.conversationId) : null
@@ -119,6 +126,6 @@ export async function POST(request) {
 
     return json(message, 201)
   } catch (caught) {
-    return handleRouteError("messages.send", caught)
+    return handleRouteError("messages.send", caught, request)
   }
 }

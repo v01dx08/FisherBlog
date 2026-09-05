@@ -3,6 +3,7 @@ import { getCurrentUser, requireUser } from "@/lib/auth"
 import { error, handleRouteError, json, readJson, RequestError } from "@/lib/http"
 import { serializePost } from "@/lib/posts"
 import { assertSameOrigin, normalizeIdentity, optionalText, validateHttpUrl } from "@/lib/security"
+import { enforceRateLimit } from "@/lib/rate-limit"
 
 const authorSelect = {
   id: true,
@@ -93,7 +94,7 @@ export async function GET(request, { params }) {
       posts: user.posts.map((post) => serializePost(post, currentUser?.id)),
     })
   } catch (caught) {
-    return handleRouteError("users.profile", caught)
+    return handleRouteError("users.profile", caught, request)
   }
 }
 
@@ -102,6 +103,7 @@ export async function PUT(request, { params }) {
     assertSameOrigin(request)
     const { username } = await params
     const actor = await requireUser(request)
+    await enforceRateLimit(request, { scope: "users.update", actorId: actor.id, limit: 30, windowMs: 60 * 60 * 1000 })
     const target = await db.user.findFirst({
       where: { OR: [{ usernameNormalized: normalizeIdentity(username) }, { id: username }] },
     })
@@ -145,6 +147,6 @@ export async function PUT(request, { params }) {
     })
     return json(updated)
   } catch (caught) {
-    return handleRouteError("users.update", caught)
+    return handleRouteError("users.update", caught, request)
   }
 }

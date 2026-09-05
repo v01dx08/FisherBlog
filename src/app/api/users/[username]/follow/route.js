@@ -2,11 +2,13 @@ import { db } from "@/lib/db"
 import { requireUser } from "@/lib/auth"
 import { error, handleRouteError, json } from "@/lib/http"
 import { assertSameOrigin, normalizeIdentity } from "@/lib/security"
+import { enforceRateLimit } from "@/lib/rate-limit"
 
 export async function POST(request, { params }) {
   try {
     assertSameOrigin(request)
     const actor = await requireUser(request)
+    await enforceRateLimit(request, { scope: "users.follow", actorId: actor.id, limit: 120, windowMs: 5 * 60 * 1000 })
     const { username } = await params
     const target = await db.user.findUnique({
       where: { usernameNormalized: normalizeIdentity(username) },
@@ -44,6 +46,6 @@ export async function POST(request, { params }) {
     const followerCount = await db.follow.count({ where: { followingId: target.id } })
     return json({ isFollowing, followerCount })
   } catch (caught) {
-    return handleRouteError("users.follow", caught)
+    return handleRouteError("users.follow", caught, request)
   }
 }

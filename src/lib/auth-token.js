@@ -1,6 +1,6 @@
 import { SignJWT, jwtVerify } from "jose"
 
-export const COOKIE_NAME = "fisher_session"
+export const COOKIE_NAME = "fishviet_session"
 const ISSUER = "fishviet"
 const AUDIENCE = "fishviet-web"
 function getSecretKey() {

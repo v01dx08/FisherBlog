@@ -264,6 +264,8 @@ export function PostCard({
   const [comment, setComment] = React.useState("")
   const [submitting, setSubmitting] = React.useState(false)
   const [copied, setCopied] = React.useState(false)
+  const [actionError, setActionError] = React.useState("")
+  const [deleteArmed, setDeleteArmed] = React.useState(false)
 
   const authorObject = typeof author === "object" ? author : { username: author }
   const authorName = authorObject.displayName || authorObject.username || "Cần thủ"
@@ -291,15 +293,17 @@ export function PostCard({
     const previousCount = likeCount
     setLiked(!liked)
     setLikeCount(liked ? Math.max(0, likeCount - 1) : likeCount + 1)
+    setActionError("")
     try {
       const response = await fetch(`/api/posts/${postId}/like`, { method: "POST" })
       const data = await response.json()
-      if (!response.ok) throw new Error()
+      if (!response.ok) throw new Error(data.error || "Không thể cập nhật lượt thích")
       setLiked(data.liked)
       setLikeCount(data.likeCount)
-    } catch {
+    } catch (caught) {
       setLiked(previousLiked)
       setLikeCount(previousCount)
+      setActionError(caught.message)
     }
   }
 
@@ -307,13 +311,15 @@ export function PostCard({
     if (!currentUser) return router.push("/login")
     const previous = bookmarked
     setBookmarked(!bookmarked)
+    setActionError("")
     try {
       const response = await fetch(`/api/posts/${postId}/bookmark`, { method: "POST" })
       const data = await response.json()
-      if (!response.ok) throw new Error()
+      if (!response.ok) throw new Error(data.error || "Không thể lưu bài viết")
       setBookmarked(data.bookmarked)
-    } catch {
+    } catch (caught) {
       setBookmarked(previous)
+      setActionError(caught.message)
     }
   }
 
@@ -321,6 +327,7 @@ export function PostCard({
     event.preventDefault()
     if (!comment.trim() || submitting) return
     setSubmitting(true)
+    setActionError("")
     try {
       const response = await fetch(`/api/posts/${postId}/comments`, {
         method: "POST",
@@ -332,7 +339,7 @@ export function PostCard({
       setComments((items) => [...items, data])
       setComment("")
     } catch (error) {
-      window.alert(error.message || "Không thể gửi bình luận")
+      setActionError(error.message || "Không thể gửi bình luận")
     } finally {
       setSubmitting(false)
     }
@@ -345,13 +352,21 @@ export function PostCard({
       else await navigator.clipboard.writeText(url)
       setCopied(true)
       setTimeout(() => setCopied(false), 1800)
-    } catch {}
+    } catch (caught) {
+      if (caught?.name !== "AbortError") setActionError("Không thể chia sẻ bài viết")
+    }
   }
 
   const remove = async () => {
-    if (!window.confirm("Xóa vĩnh viễn nhật ký này?")) return
+    if (!deleteArmed) {
+      setDeleteArmed(true)
+      return
+    }
+    setActionError("")
     const response = await fetch(`/api/posts/${postId}`, { method: "DELETE" })
+    const data = await response.json().catch(() => ({}))
     if (response.ok) onPostDeleted?.(postId)
+    else setActionError(data.error || "Không thể xóa nhật ký")
   }
 
   return (
@@ -387,12 +402,12 @@ export function PostCard({
             </button>
             {canDelete && (
               <>
-                <button type="button" onClick={() => setMenuOpen((open) => !open)} aria-label="Tùy chọn bài viết" className="kinetic flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted">
+                <button type="button" onClick={() => { setMenuOpen((open) => !open); setDeleteArmed(false) }} aria-label="Tùy chọn bài viết" aria-expanded={menuOpen} className="kinetic flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted">
                   <DotsThree size={20} weight="bold" />
                 </button>
                 {menuOpen && (
                   <button type="button" onClick={remove} className="absolute right-0 top-11 z-10 flex w-40 items-center gap-2 rounded-2xl bg-popover px-4 py-3 text-xs font-semibold text-destructive ring-1 ring-foreground/10 shadow-xl">
-                    <Trash size={16} weight="light" /> Xóa nhật ký
+                    <Trash size={16} weight="light" /> {deleteArmed ? "Xác nhận xóa" : "Xóa nhật ký"}
                   </button>
                 )}
               </>
@@ -419,7 +434,7 @@ export function PostCard({
         </div>
 
         <div className="grid grid-cols-4 gap-1 px-3 py-2 sm:px-4">
-          <button type="button" onClick={toggleLike} className={`kinetic flex items-center justify-center gap-2 rounded-lg py-2.5 text-xs font-semibold hover:bg-muted ${liked ? "text-rose-500" : "text-muted-foreground"}`}>
+          <button type="button" onClick={toggleLike} aria-pressed={liked} className={`kinetic flex items-center justify-center gap-2 rounded-lg py-2.5 text-xs font-semibold hover:bg-muted ${liked ? "text-primary" : "text-muted-foreground"}`}>
             <Fish size={18} weight={liked ? "fill" : "regular"} /> Thích
           </button>
           <button type="button" onClick={() => setCommentsOpen((open) => !open)} className="kinetic flex items-center justify-center gap-2 rounded-lg py-2.5 text-xs font-semibold text-muted-foreground hover:bg-muted">
@@ -432,6 +447,8 @@ export function PostCard({
             <Certificate size={18} weight="light" /> Chứng nhận
           </Link>
         </div>
+
+        {actionError && <p role="alert" className="mx-4 mb-3 rounded-xl bg-destructive/10 px-4 py-3 text-xs text-destructive sm:mx-5">{actionError}</p>}
 
         <AnimatePresence initial={false}>
           {commentsOpen && (

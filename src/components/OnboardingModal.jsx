@@ -81,7 +81,7 @@ export function OnboardingModal({ isOpen, user, onComplete }) {
           <div className="mb-6 p-3.5 rounded-2xl bg-primary/5 border border-primary/10 text-xs text-muted-foreground flex items-start gap-2.5">
             <Shield className="h-4 w-4 text-primary shrink-0 mt-0.5" />
             <span>
-              Tài khoản của bạn được cấp bởi Ban Quản Trị. Thiết lập liên kết kênh mạng xã hội giúp đối chiếu bản phát hành khi nội dung được đăng tải trước trên FishViet.
+              Tài khoản của bạn được cấp bởi Ban Quản Trị. Thiết lập liên kết kênh mạng xã hội giúp đối chiếu bản phát hành khi nội dung được đăng tải trước trên Nhật ký ngày đi câu.
             </span>
           </div>
 

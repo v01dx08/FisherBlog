@@ -19,7 +19,7 @@ export async function GET(request) {
     ])
     return json({ notifications, unreadCount })
   } catch (caught) {
-    return handleRouteError("notifications.list", caught)
+    return handleRouteError("notifications.list", caught, request)
   }
 }
 
@@ -33,6 +33,6 @@ export async function PATCH(request) {
     })
     return json({ success: true })
   } catch (caught) {
-    return handleRouteError("notifications.read", caught)
+    return handleRouteError("notifications.read", caught, request)
   }
 }

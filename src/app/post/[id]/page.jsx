@@ -145,26 +145,39 @@ export default function PostDetailPage({ params }) {
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground"><Certificate size={23} weight="duotone" /></span>
                 <div>
                   <h1 className="text-xl font-bold tracking-[-0.03em]">Bản ghi nội dung gốc</h1>
-                  <p className="mt-1 text-xs leading-5 text-muted-foreground">FishViet ghi nhận nội dung trước các liên kết phát hành bên ngoài.</p>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">Nhật ký ngày đi câu ghi nhận nội dung trước các liên kết phát hành bên ngoài.</p>
                 </div>
               </div>
               <dl className="mt-6 grid grid-cols-2 gap-4 text-xs">
                 <div><dt className="text-muted-foreground">Tác giả</dt><dd className="mt-1 font-bold">{post.author.displayName || post.author.username}</dd></div>
                 <div><dt className="text-muted-foreground">Thời điểm ghi nhận</dt><dd className="mt-1 font-bold">{new Date(post.proofIssuedAt).toLocaleString("vi-VN")}</dd></div>
-                <div><dt className="text-muted-foreground">Thuật toán</dt><dd className="mt-1 font-bold">SHA-256</dd></div>
+                <div><dt className="text-muted-foreground">Thuật toán</dt><dd className="mt-1 font-bold">SHA-256 · v{post.proofVersion || 1}</dd></div>
                 <div><dt className="text-muted-foreground">Nguồn gốc</dt><dd className="mt-1 font-bold text-primary">FishViet.vn</dd></div>
               </dl>
+              {post.proofVersion >= 2 && (
+                <div className="mt-4 rounded-xl bg-primary/8 p-4 ring-1 ring-primary/15">
+                  <p className="text-xs font-bold text-primary">Payload kiểm chứng độc lập</p>
+                  <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
+                    Băm nội dung, metadata, thời điểm và {(post.proofPayload?.media || []).length} tệp upload theo byte gốc.
+                  </p>
+                  {(post.proofPayload?.media || []).map((asset) => (
+                    <p key={asset.filename} className="mt-2 truncate font-mono text-[10px] text-muted-foreground" title={asset.sha256 || "Không có digest byte"}>
+                      {asset.filename}: {asset.sha256 || "legacy-no-digest"}
+                    </p>
+                  ))}
+                </div>
+              )}
               <button type="button" onClick={copyProof} className="kinetic mt-5 flex w-full items-center justify-between rounded-xl bg-muted p-4 text-left active:scale-[0.98]">
                 <span className="min-w-0"><span className="block text-[10px] uppercase tracking-[0.14em] text-muted-foreground">Fingerprint</span><span className="mt-1 block truncate font-mono text-[10px]">{post.proofHash}</span></span>
                 {copied ? <Check size={18} weight="bold" className="shrink-0 text-primary" /> : <Copy size={18} weight="duotone" className="shrink-0 text-muted-foreground" />}
               </button>
-              <div className="mt-4 flex items-center gap-2 text-[11px] font-bold text-primary"><ShieldCheck size={16} weight="duotone" /> FishViet Content Proof v1</div>
+              <div className="mt-4 flex items-center gap-2 text-[11px] font-bold text-primary"><ShieldCheck size={16} weight="duotone" /> Nhật ký ngày đi câu Content Proof v{post.proofVersion || 1}</div>
             </section>
 
             <section className="social-card p-5 sm:p-6">
               <div className="flex items-center gap-3">
                 <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/12 text-primary"><LinkSimple size={21} weight="duotone" /></span>
-                <div><h2 className="text-base font-bold">Chuỗi phát hành</h2><p className="text-xs text-muted-foreground">Đối chiếu bản gốc FishViet với bài đã đăng nơi khác.</p></div>
+                <div><h2 className="text-base font-bold">Chuỗi phát hành</h2><p className="text-xs text-muted-foreground">Đối chiếu bản gốc Nhật ký ngày đi câu với bài đã đăng nơi khác.</p></div>
               </div>
 
               <div className="mt-5 space-y-2">

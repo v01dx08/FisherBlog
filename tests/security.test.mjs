@@ -10,6 +10,7 @@ import {
 } from "../src/lib/security.js"
 import { matchesFileSignature } from "../src/lib/storage.js"
 import { validatePublicationInput } from "../src/lib/publications.js"
+import { buildRateLimitKey } from "../src/lib/rate-limit.js"
 
 test("identity values normalize consistently", () => {
   assert.equal(normalizeIdentity("  MinhDucFishing  "), "minhducfishing")
@@ -42,4 +43,12 @@ test("publication links must match selected platform", () => {
   )
   assert.throws(() => validatePublicationInput({ platform: "YOUTUBE", url: "https://example.com/demo" }))
   assert.throws(() => validatePublicationInput({ platform: "FACEBOOK", url: "javascript:alert(1)" }))
+})
+
+test("rate-limit keys hide raw identity and remain scope-specific", () => {
+  const first = buildRateLimitKey("posts.create", "user-1")
+  assert.match(first, /^[a-f0-9]{64}$/)
+  assert.equal(first, buildRateLimitKey("posts.create", "user-1"))
+  assert.notEqual(first, buildRateLimitKey("messages.send", "user-1"))
+  assert.equal(first.includes("user-1"), false)
 })

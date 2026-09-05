@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto"
+
 const JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8" }
 
 export function json(data, status = 200, headers = {}) {
@@ -7,8 +9,8 @@ export function json(data, status = 200, headers = {}) {
   })
 }
 
-export function error(message, status = 400, details) {
-  return json({ error: message, ...(details ? { details } : {}) }, status)
+export function error(message, status = 400, details, headers = {}) {
+  return json({ error: message, ...(details ? { details } : {}) }, status, headers)
 }
 
 export async function readJson(request, maxBytes = 32_768) {
@@ -34,24 +36,43 @@ export async function readJson(request, maxBytes = 32_768) {
 }
 
 export class RequestError extends Error {
-  constructor(message, status = 400, details) {
+  constructor(message, status = 400, details, headers = {}) {
     super(message)
     this.name = "RequestError"
     this.status = status
     this.details = details
+    this.headers = headers
   }
 }
 
-export function handleRouteError(route, caught) {
+export function getRequestId(request) {
+  const supplied = request?.headers?.get?.("x-request-id")
+  return supplied && /^[A-Za-z0-9._-]{8,128}$/.test(supplied) ? supplied : randomUUID()
+}
+
+export function logEvent(level, event, fields = {}) {
+  const write = level === "error" ? console.error : level === "warn" ? console.warn : console.log
+  write(JSON.stringify({ timestamp: new Date().toISOString(), level, event, ...fields }))
+}
+
+export function handleRouteError(route, caught, request) {
   if (caught instanceof RequestError) {
-    return error(caught.message, caught.status, caught.details)
+    return error(caught.message, caught.status, caught.details, caught.headers)
   }
 
   if (caught?.code === "P2002") return error("Dữ liệu đã tồn tại", 409)
   if (caught?.code === "P2025") return error("Không tìm thấy dữ liệu", 404)
 
-  console.error(`[${route}]`, caught)
-  return error("Lỗi máy chủ nội bộ", 500)
+  const requestId = getRequestId(request)
+  logEvent("error", "route.error", {
+    route,
+    requestId,
+    method: request?.method,
+    pathname: request ? new URL(request.url).pathname : undefined,
+    error: caught instanceof Error ? caught.message : String(caught),
+    ...(process.env.NODE_ENV !== "production" && caught?.stack ? { stack: caught.stack } : {}),
+  })
+  return error("Lỗi máy chủ nội bộ", 500, { requestId }, { "X-Request-Id": requestId })
 }
 
 export function getClientIp(request) {

@@ -5,7 +5,7 @@ import { Header } from "@/components/Header"
 import { LeftSidebar } from "@/components/LeftSidebar"
 import { RightSidebar } from "@/components/RightSidebar"
 import { motion, AnimatePresence } from "framer-motion"
-import { Compass, Video, Fish, MapPin, Heart, MessageCircle, Play, Eye } from "lucide-react"
+import { Compass, Video, Fish, MapPin, MessageCircle, Play, Eye, X } from "lucide-react"
 import Link from "next/link"
 
 const STATIC_CATEGORIES = [
@@ -29,11 +29,20 @@ export default function ExplorePage() {
   const [loading, setLoading] = useState(true)
   const [selectedMediaPost, setSelectedMediaPost] = useState(null)
   const [dynamicCategories, setDynamicCategories] = useState([])
+  const [error, setError] = useState("")
 
   useEffect(() => {
     Promise.all([
-      fetch("/api/posts").then((r) => r.json()),
-      fetch("/api/tags/trending").then((r) => r.json()),
+      fetch("/api/posts").then(async (response) => {
+        const data = await response.json()
+        if (!response.ok) throw new Error(data.error || "Không thể tải bài viết")
+        return data
+      }),
+      fetch("/api/tags/trending").then(async (response) => {
+        const data = await response.json()
+        if (!response.ok) throw new Error(data.error || "Không thể tải chủ đề")
+        return data
+      }),
     ])
       .then(([postsData, tagsData]) => {
         if (Array.isArray(postsData.items)) setPosts(postsData.items)
@@ -47,7 +56,7 @@ export default function ExplorePage() {
           )
         }
       })
-      .catch((err) => console.error("Explore fetch error:", err))
+      .catch((caught) => setError(caught.message || "Không thể tải nội dung khám phá"))
       .finally(() => setLoading(false))
   }, [])
 
@@ -64,13 +73,13 @@ export default function ExplorePage() {
   })
 
   return (
-    <div className="min-h-screen bg-background overflow-x-hidden">
+    <main id="main-content" className="h-[100dvh] w-full overflow-hidden bg-background">
       <Header />
 
-      <div className="flex justify-center mx-auto max-w-[1600px] pt-20">
-        <LeftSidebar />
+      <div className="mx-auto grid h-full w-full max-w-[1580px] grid-cols-1 gap-5 overflow-hidden px-3 pb-[76px] pt-[76px] sm:px-5 md:pb-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,960px)_300px] xl:grid-cols-[280px_minmax(0,960px)_320px] xl:gap-6">
+        <div className="hidden xl:block"><LeftSidebar /></div>
 
-        <main className="flex-1 max-w-[960px] w-full mt-6 px-4 sm:px-6 pb-20 shrink-0">
+        <section className="custom-scrollbar min-h-0 min-w-0 overflow-y-auto pb-20 pt-6 lg:col-start-2">
           {/* Hero Banner */}
           <div className="bg-gradient-to-r from-sky-900 via-teal-900 to-emerald-950 rounded-3xl p-6 sm:p-8 mb-6 text-white relative overflow-hidden shadow-lg">
             <div className="relative z-10 max-w-xl">
@@ -115,6 +124,12 @@ export default function ExplorePage() {
                 <div key={n} className="h-64 rounded-2xl bg-muted animate-pulse" />
               ))}
             </div>
+          ) : error ? (
+            <div className="social-card py-16 text-center" role="alert">
+              <Fish className="mx-auto h-12 w-12 text-destructive/70" />
+              <h2 className="mt-4 text-lg font-bold">Không thể tải mục khám phá</h2>
+              <p className="mt-2 text-xs text-muted-foreground">{error}</p>
+            </div>
           ) : filteredPosts.length === 0 ? (
             <div className="text-center py-20 bg-card rounded-3xl border border-border/60 p-8">
               <Fish className="h-12 w-12 mx-auto text-primary/40 mb-3" />
@@ -132,6 +147,10 @@ export default function ExplorePage() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.04 }}
                   onClick={() => setSelectedMediaPost(post)}
+                  onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") setSelectedMediaPost(post) }}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Xem media của ${post.author?.displayName || post.author?.username}`}
                   className="group relative rounded-2xl overflow-hidden bg-muted aspect-[4/3] cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300"
                 >
                   {/* Media display */}
@@ -171,7 +190,7 @@ export default function ExplorePage() {
                       </span>
                       <div className="flex items-center gap-3">
                         <span className="flex items-center gap-1">
-                          <Heart className="h-3 w-3 fill-rose-500 text-rose-500" />
+                          <Fish className="h-3 w-3 fill-sky-500 text-sky-500" />
                           {post.likeCount || 0}
                         </span>
                         <span className="flex items-center gap-1">
@@ -185,21 +204,26 @@ export default function ExplorePage() {
               ))}
             </div>
           )}
-        </main>
+        </section>
 
-        <RightSidebar />
+        <div className="hidden lg:block lg:col-start-3"><RightSidebar /></div>
       </div>
 
       {/* Media Detail Modal */}
       {selectedMediaPost && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/90 backdrop-blur-md"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Chi tiết media"
+          onKeyDown={(event) => { if (event.key === "Escape") setSelectedMediaPost(null) }}
           onClick={() => setSelectedMediaPost(null)}
         >
           <div
             className="bg-card max-w-2xl w-full rounded-3xl overflow-hidden border border-border/80 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
+            <button type="button" autoFocus aria-label="Đóng chi tiết media" onClick={() => setSelectedMediaPost(null)} className="absolute right-6 top-6 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/60 text-white"><X className="h-4 w-4" /></button>
             {selectedMediaPost.videoUrl ? (
               <video
                 src={selectedMediaPost.videoUrl}
@@ -242,6 +266,6 @@ export default function ExplorePage() {
           </div>
         </div>
       )}
-    </div>
+    </main>
   )
 }

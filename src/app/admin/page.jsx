@@ -48,6 +48,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [feedback, setFeedback] = useState({ type: "", message: "" })
+  const [confirmation, setConfirmation] = useState(null)
 
   useEffect(() => {
     let active = true
@@ -113,10 +114,6 @@ export default function AdminDashboard() {
   }
 
   const handleDeleteUser = async (id, username) => {
-    if (!window.confirm(`Bạn có chắc muốn thu hồi tài khoản "${username}"?`)) {
-      return
-    }
-
     try {
       const res = await fetch(`/api/admin/users/${id}`, { method: "DELETE" })
       const data = await res.json()
@@ -149,10 +146,6 @@ export default function AdminDashboard() {
   }
 
   const handleDeletePost = async (postId) => {
-    if (!window.confirm("Bạn có chắc muốn kiểm duyệt và gỡ bỏ bài viết này khỏi hệ thống?")) {
-      return
-    }
-
     try {
       const res = await fetch(`/api/posts/${postId}`, { method: "DELETE" })
       const data = await res.json()
@@ -196,7 +189,7 @@ export default function AdminDashboard() {
             <div>
               <h1 className="text-2xl font-bold">Bảng Điều Khiển Quản Trị</h1>
               <p className="text-sm text-muted-foreground">
-                Hệ thống FishViet &middot; Phân tích, cấp quyền và kiểm duyệt nội dung
+                Hệ thống Nhật ký ngày đi câu &middot; Phân tích, cấp quyền và kiểm duyệt nội dung
               </p>
             </div>
           </div>
@@ -264,7 +257,7 @@ export default function AdminDashboard() {
               color: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
             },
             {
-              label: "Lượt Thả tim (Like)",
+              label: "Lượt thả cá",
               value: stats?.kpis?.totalLikes || 0,
               icon: Fish,
               color: "bg-rose-500/10 text-rose-600 dark:text-rose-400",
@@ -430,7 +423,8 @@ export default function AdminDashboard() {
                       </div>
                       {user.role !== "ADMIN" && user.status === "ACTIVE" && (
                         <button
-                          onClick={() => handleDeleteUser(user.id, user.username)}
+                          onClick={() => setConfirmation({ type: "user", id: user.id, username: user.username })}
+                          aria-label={`Thu hồi tài khoản ${user.username}`}
                           className="text-muted-foreground hover:text-destructive transition-colors p-2 rounded-lg hover:bg-destructive/10"
                           title="Thu hồi tài khoản"
                         >
@@ -538,7 +532,7 @@ export default function AdminDashboard() {
                     <Button
                       variant="destructive"
                       size="sm"
-                      onClick={() => handleDeletePost(post.id)}
+                      onClick={() => setConfirmation({ type: "post", id: post.id })}
                       className="rounded-xl h-8 px-3 text-xs gap-1.5"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -558,6 +552,33 @@ export default function AdminDashboard() {
           </div>
         )}
       </div>
+
+      {confirmation && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-background/80 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="admin-confirm-title" onClick={() => setConfirmation(null)}>
+          <section className="social-card w-full max-w-md p-6" onClick={(event) => event.stopPropagation()}>
+            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-destructive/10 text-destructive"><AlertCircle className="h-5 w-5" /></span>
+            <h2 id="admin-confirm-title" className="mt-4 text-lg font-bold">
+              {confirmation.type === "user" ? "Thu hồi tài khoản?" : "Gỡ bài viết?"}
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+              {confirmation.type === "user"
+                ? `Tài khoản “${confirmation.username}” mất quyền truy cập ngay. Có thể kích hoạt lại sau.`
+                : "Bài viết và media đính kèm sẽ bị xóa vĩnh viễn. Hành động không thể hoàn tác."}
+            </p>
+            <div className="mt-6 flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setConfirmation(null)}>Hủy</Button>
+              <Button variant="destructive" autoFocus onClick={async () => {
+                const pending = confirmation
+                setConfirmation(null)
+                if (pending.type === "user") await handleDeleteUser(pending.id, pending.username)
+                else await handleDeletePost(pending.id)
+              }}>
+                {confirmation.type === "user" ? "Thu hồi" : "Xóa vĩnh viễn"}
+              </Button>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   )
 }

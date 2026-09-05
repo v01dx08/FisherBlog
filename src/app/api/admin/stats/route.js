@@ -69,11 +69,10 @@ export async function GET(request) {
         totalPosts,
         totalComments,
         totalLikes,
-        copyrightProtectedRate: "100%",
       },
       timeline: [...timelineMap.values()],
     })
   } catch (caught) {
-    return handleRouteError("admin.stats", caught)
+    return handleRouteError("admin.stats", caught, request)
   }
 }

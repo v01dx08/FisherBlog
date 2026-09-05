@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto"
+import { createHash, randomUUID } from "node:crypto"
 import { unlink, writeFile } from "node:fs/promises"
 import path from "node:path"
 import { requireUser } from "@/lib/auth"
@@ -6,6 +6,7 @@ import { db } from "@/lib/db"
 import { handleRouteError, json, RequestError } from "@/lib/http"
 import { assertSameOrigin } from "@/lib/security"
 import { ensureUploadDirectory, extensionForMime, matchesFileSignature, MAX_UPLOAD_BYTES, UPLOAD_DIR } from "@/lib/storage"
+import { enforceRateLimit } from "@/lib/rate-limit"
 
 export const runtime = "nodejs"
 
@@ -13,6 +14,7 @@ export async function POST(request) {
   try {
     assertSameOrigin(request)
     const user = await requireUser(request)
+    await enforceRateLimit(request, { scope: "uploads.create", actorId: user.id, limit: 40, windowMs: 60 * 60 * 1000 })
 
     const declaredLength = Number(request.headers.get("content-length") || 0)
     if (declaredLength > MAX_UPLOAD_BYTES + 1_000_000) {
@@ -36,12 +38,19 @@ export async function POST(request) {
     await ensureUploadDirectory()
     const filename = `${randomUUID()}${extension}`
     const filePath = path.join(UPLOAD_DIR, filename)
+    const sha256 = createHash("sha256").update(buffer).digest("hex")
     await writeFile(filePath, buffer, {
       flag: "wx",
     })
     try {
       await db.mediaAsset.create({
-        data: { filename, mimeType: file.type, size: file.size, ownerId: user.id },
+        data: {
+          filename,
+          mimeType: file.type,
+          size: file.size,
+          sha256,
+          ownerId: user.id,
+        },
       })
     } catch (error) {
       await unlink(filePath).catch(() => {})
@@ -49,8 +58,8 @@ export async function POST(request) {
     }
 
     // ponytail: Local volume supports one Docker node. Move this adapter to S3/R2 before horizontal scaling.
-    return json({ url: `/api/uploads/${filename}`, type: file.type, size: file.size }, 201)
+    return json({ url: `/api/uploads/${filename}`, type: file.type, size: file.size, sha256 }, 201)
   } catch (caught) {
-    return handleRouteError("uploads.create", caught)
+    return handleRouteError("uploads.create", caught, request)
   }
 }

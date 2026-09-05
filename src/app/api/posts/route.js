@@ -2,7 +2,9 @@ import { db } from "@/lib/db"
 import { getCurrentUser, requireUser } from "@/lib/auth"
 import { handleRouteError, json, readJson, RequestError } from "@/lib/http"
 import { assertSameOrigin, clampLimit, cleanText, optionalText, validateHttpUrl } from "@/lib/security"
-import { createPostProof, serializePost } from "@/lib/posts"
+import { createPostProofPayload, hashPostProofPayload, serializePost } from "@/lib/posts"
+import { enforceRateLimit } from "@/lib/rate-limit"
+import { feedAuthorSelect, feedCommentInclude, getPostFeed } from "@/lib/feed"
 
 function localUploadFilename(value) {
   if (!value) return null
@@ -12,18 +14,6 @@ function localUploadFilename(value) {
   } catch {
     return null
   }
-}
-
-const authorSelect = {
-  id: true,
-  username: true,
-  displayName: true,
-  avatarUrl: true,
-  role: true,
-}
-
-const commentInclude = {
-  author: { select: authorSelect },
 }
 
 export async function GET(request) {
@@ -36,53 +26,9 @@ export async function GET(request) {
     const limit = clampLimit(searchParams.get("limit"), 12, 30)
     const currentUser = await getCurrentUser(request)
 
-    const where = {
-      visibility: "PUBLIC",
-      ...(tag ? { content: { contains: tag.startsWith("#") ? tag : `#${tag}`, mode: "insensitive" } } : {}),
-      ...(query
-        ? {
-            OR: [
-              { content: { contains: query, mode: "insensitive" } },
-              { species: { contains: query, mode: "insensitive" } },
-              { spotName: { contains: query, mode: "insensitive" } },
-              { author: { username: { contains: query, mode: "insensitive" } } },
-              { author: { displayName: { contains: query, mode: "insensitive" } } },
-            ],
-          }
-        : {}),
-      ...(saved && currentUser ? { bookmarks: { some: { userId: currentUser.id } } } : {}),
-    }
-
-    if (saved && !currentUser) return json({ items: [], nextCursor: null })
-
-    const posts = await db.post.findMany({
-      where,
-      include: {
-        author: { select: authorSelect },
-        comments: {
-          include: commentInclude,
-          orderBy: { createdAt: "asc" },
-          take: 20,
-        },
-        likes: currentUser ? { where: { userId: currentUser.id }, select: { userId: true } } : false,
-        bookmarks: currentUser
-          ? { where: { userId: currentUser.id }, select: { userId: true } }
-          : false,
-        _count: { select: { likes: true, comments: true } },
-      },
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      take: limit + 1,
-      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-    })
-
-    const hasMore = posts.length > limit
-    const page = hasMore ? posts.slice(0, limit) : posts
-    return json({
-      items: page.map((post) => serializePost(post, currentUser?.id)),
-      nextCursor: hasMore ? page.at(-1)?.id : null,
-    })
+    return json(await getPostFeed({ tag, query, saved, cursor, limit, currentUser }))
   } catch (caught) {
-    return handleRouteError("posts.list", caught)
+    return handleRouteError("posts.list", caught, request)
   }
 }
 
@@ -90,6 +36,7 @@ export async function POST(request) {
   try {
     assertSameOrigin(request)
     const author = await requireUser(request)
+    await enforceRateLimit(request, { scope: "posts.create", actorId: author.id, limit: 30, windowMs: 60 * 60 * 1000 })
     const body = await readJson(request)
     const content = cleanText(body.content, { name: "Nội dung bài viết", min: 3, max: 3_000 })
     const imageUrl = validateHttpUrl(body.imageUrl, "Đường dẫn ảnh")
@@ -106,8 +53,28 @@ export async function POST(request) {
     }
 
     const createdAt = new Date()
-    const filenames = [localUploadFilename(imageUrl), localUploadFilename(videoUrl)].filter(Boolean)
+    const filenames = [...new Set([localUploadFilename(imageUrl), localUploadFilename(videoUrl)].filter(Boolean))]
     const post = await db.$transaction(async (tx) => {
+      const media = filenames.length
+        ? await tx.mediaAsset.findMany({
+            where: { filename: { in: filenames }, ownerId: author.id, postId: null },
+            select: { filename: true, mimeType: true, size: true, sha256: true },
+          })
+        : []
+      if (media.length !== filenames.length) throw new RequestError("Tệp tải lên không hợp lệ", 400)
+
+      const proofPayload = createPostProofPayload({
+        authorId: author.id,
+        content,
+        imageUrl,
+        videoUrl,
+        media,
+        species,
+        weightKg,
+        spotName,
+        visibility,
+        createdAt,
+      })
       const created = await tx.post.create({
         data: {
           content,
@@ -120,11 +87,13 @@ export async function POST(request) {
           authorId: author.id,
           createdAt,
           proofIssuedAt: createdAt,
-          proofHash: createPostProof({ authorId: author.id, content, imageUrl, videoUrl, createdAt }),
+          proofHash: hashPostProofPayload(proofPayload),
+          proofVersion: 2,
+          proofPayload,
         },
         include: {
-          author: { select: authorSelect },
-          comments: { include: commentInclude },
+          author: { select: feedAuthorSelect },
+          comments: { include: feedCommentInclude },
           likes: { select: { userId: true } },
           bookmarks: { select: { userId: true } },
           _count: { select: { likes: true, comments: true } },
@@ -142,6 +111,6 @@ export async function POST(request) {
 
     return json(serializePost(post, author.id), 201)
   } catch (caught) {
-    return handleRouteError("posts.create", caught)
+    return handleRouteError("posts.create", caught, request)
   }
 }

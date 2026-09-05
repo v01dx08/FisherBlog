@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth"
 import { assertSameOrigin } from "@/lib/security"
 import { error, handleRouteError, json, readJson, RequestError } from "@/lib/http"
 import { validatePublicationInput } from "@/lib/publications"
+import { enforceRateLimit } from "@/lib/rate-limit"
 
 async function requirePostManager(postId, user) {
   const post = await db.post.findUnique({ where: { id: postId }, select: { authorId: true, proofIssuedAt: true } })
@@ -18,10 +19,11 @@ export async function POST(request, { params }) {
     assertSameOrigin(request)
     const { id } = await params
     const user = await requireUser(request)
+    await enforceRateLimit(request, { scope: "posts.publications", actorId: user.id, limit: 30, windowMs: 60 * 60 * 1000 })
     const input = validatePublicationInput(await readJson(request, 8_192))
     const post = await requirePostManager(id, user)
     if (input.publishedAt && input.publishedAt < post.proofIssuedAt) {
-      throw new RequestError("Thời điểm phát hành không thể trước bản ghi gốc FishViet", 400)
+      throw new RequestError("Thời điểm phát hành không thể trước bản ghi gốc Nhật ký ngày đi câu", 400)
     }
 
     const publication = await db.$transaction(async (tx) => {
@@ -39,7 +41,7 @@ export async function POST(request, { params }) {
 
     return json(publication, 201)
   } catch (caught) {
-    return handleRouteError("posts.publications.add", caught)
+    return handleRouteError("posts.publications.add", caught, request)
   }
 }
 
@@ -48,6 +50,7 @@ export async function DELETE(request, { params }) {
     assertSameOrigin(request)
     const { id } = await params
     const user = await requireUser(request)
+    await enforceRateLimit(request, { scope: "posts.publications", actorId: user.id, limit: 30, windowMs: 60 * 60 * 1000 })
     const { publicationId } = await readJson(request, 4_096)
     await requirePostManager(id, user)
 
@@ -70,6 +73,6 @@ export async function DELETE(request, { params }) {
 
     return json({ success: true })
   } catch (caught) {
-    return handleRouteError("posts.publications.delete", caught)
+    return handleRouteError("posts.publications.delete", caught, request)
   }
 }

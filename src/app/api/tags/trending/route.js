@@ -1,7 +1,9 @@
 import { db } from "@/lib/db";
 import { handleRouteError, json } from "@/lib/http";
 
-export async function GET() {
+export const dynamic = "force-dynamic";
+
+export async function GET(request) {
   try {
     const allPosts = await db.post.findMany({
       where: { visibility: "PUBLIC" },
@@ -38,6 +40,6 @@ export async function GET() {
 
     return json(trending);
   } catch (caught) {
-    return handleRouteError("tags.trending", caught);
+    return handleRouteError("tags.trending", caught, request);
   }
 }

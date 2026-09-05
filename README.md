@@ -1,4 +1,4 @@
-# FishViet
+# Nhật ký ngày đi câu
 
 Nền tảng FishViet.vn dành cho influencer câu cá đăng bản gốc trước khi phát hành lên mạng xã hội khác. Mỗi bài viết có dấu thời gian và fingerprint SHA-256 để đối chiếu lịch sử nội dung.
 
@@ -77,4 +77,3 @@ Backup cả media volume trước mỗi release có thay đổi storage.
   - Username: fishviet_admin
   - Email: admin.test@fishviet.vn
   - Password: FishViet@Test2026!
-

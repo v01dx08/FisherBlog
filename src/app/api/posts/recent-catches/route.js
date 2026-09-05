@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { handleRouteError, json } from "@/lib/http";
 
-export async function GET() {
+export async function GET(request) {
   try {
     // Get recent posts and try to extract fish name + weight from content
     const posts = await db.post.findMany({
@@ -52,6 +52,6 @@ export async function GET() {
 
     return json(catches);
   } catch (caught) {
-    return handleRouteError("posts.recent-catches", caught);
+    return handleRouteError("posts.recent-catches", caught, request);
   }
 }

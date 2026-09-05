@@ -2,6 +2,7 @@ import { db } from "@/lib/db"
 import { requireUser } from "@/lib/auth"
 import { error, handleRouteError, json, readJson } from "@/lib/http"
 import { assertSameOrigin, cleanText } from "@/lib/security"
+import { enforceRateLimit } from "@/lib/rate-limit"
 
 const authorSelect = {
   id: true,
@@ -11,7 +12,7 @@ const authorSelect = {
   avatarUrl: true,
 }
 
-export async function GET(_request, { params }) {
+export async function GET(request, { params }) {
   try {
     const { id } = await params
     const comments = await db.comment.findMany({
@@ -22,7 +23,7 @@ export async function GET(_request, { params }) {
     })
     return json(comments)
   } catch (caught) {
-    return handleRouteError("comments.list", caught)
+    return handleRouteError("comments.list", caught, request)
   }
 }
 
@@ -31,6 +32,7 @@ export async function POST(request, { params }) {
     assertSameOrigin(request)
     const { id } = await params
     const user = await requireUser(request)
+    await enforceRateLimit(request, { scope: "comments.create", actorId: user.id, limit: 60, windowMs: 10 * 60 * 1000 })
     const { content: rawContent } = await readJson(request, 8_192)
     const content = cleanText(rawContent, { name: "Bình luận", min: 1, max: 1_000 })
     const post = await db.post.findUnique({
@@ -63,6 +65,6 @@ export async function POST(request, { params }) {
 
     return json(comment, 201)
   } catch (caught) {
-    return handleRouteError("comments.create", caught)
+    return handleRouteError("comments.create", caught, request)
   }
 }

@@ -2,12 +2,12 @@
 
 import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Bell, Heart, MessageCircle, ShieldCheck, UserPlus, Check, Loader2 } from "lucide-react"
+import { Bell, Fish, MessageCircle, ShieldCheck, UserPlus, Check, Loader2 } from "lucide-react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import Link from "next/link"
 
 const ICON_MAP = {
-  like: Heart,
+  like: Fish,
   comment: MessageCircle,
   follow: UserPlus,
   system: ShieldCheck,

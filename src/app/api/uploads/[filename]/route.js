@@ -27,10 +27,13 @@ export async function GET(request, { params }) {
 
     const file = await stat(filePath)
     const range = request.headers.get("range")
+    const isPublic = asset.post?.visibility === "PUBLIC"
     const headers = {
       "Content-Type": asset.mimeType || mimeForFilename(filename),
       "Accept-Ranges": "bytes",
-      "Cache-Control": "public, max-age=31536000, immutable",
+      "Cache-Control": isPublic ? "public, max-age=31536000, immutable" : "private, no-store",
+      ...(isPublic ? {} : { Vary: "Cookie" }),
+      ...(asset.sha256 ? { ETag: `"sha256-${asset.sha256}"` } : {}),
       "X-Content-Type-Options": "nosniff",
     }
 
@@ -41,8 +44,13 @@ export async function GET(request, { params }) {
 
     const match = /^bytes=(\d*)-(\d*)$/.exec(range)
     if (!match) return new Response(null, { status: 416 })
-    const start = match[1] ? Number(match[1]) : 0
-    const end = match[2] ? Math.min(Number(match[2]), file.size - 1) : file.size - 1
+    const suffixLength = !match[1] && match[2] ? Number(match[2]) : null
+    const start = suffixLength === null
+      ? Number(match[1] || 0)
+      : Math.max(file.size - suffixLength, 0)
+    const end = suffixLength === null && match[2]
+      ? Math.min(Number(match[2]), file.size - 1)
+      : file.size - 1
     if (start > end || start >= file.size) return new Response(null, { status: 416 })
 
     headers["Content-Length"] = String(end - start + 1)

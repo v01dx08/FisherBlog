@@ -34,6 +34,6 @@ export async function GET(request, { params }) {
 
     return json(messages)
   } catch (caught) {
-    return handleRouteError("messages.detail", caught)
+    return handleRouteError("messages.detail", caught, request)
   }
 }

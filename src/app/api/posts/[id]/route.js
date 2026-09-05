@@ -6,6 +6,7 @@ import { assertSameOrigin } from "@/lib/security"
 import { unlink } from "node:fs/promises"
 import path from "node:path"
 import { UPLOAD_DIR } from "@/lib/storage"
+import { enforceRateLimit } from "@/lib/rate-limit"
 
 const authorSelect = {
   id: true,
@@ -47,7 +48,7 @@ export async function GET(request, { params }) {
 
     return json(serializePost(post, currentUser?.id))
   } catch (caught) {
-    return handleRouteError("posts.detail", caught)
+    return handleRouteError("posts.detail", caught, request)
   }
 }
 
@@ -56,6 +57,7 @@ export async function DELETE(request, { params }) {
     assertSameOrigin(request)
     const { id } = await params
     const user = await requireUser(request)
+    await enforceRateLimit(request, { scope: "posts.delete", actorId: user.id, limit: 20, windowMs: 60 * 60 * 1000 })
     const post = await db.post.findUnique({
       where: { id },
       select: { authorId: true, mediaAssets: { select: { filename: true } } },
@@ -83,6 +85,6 @@ export async function DELETE(request, { params }) {
 
     return json({ success: true })
   } catch (caught) {
-    return handleRouteError("posts.delete", caught)
+    return handleRouteError("posts.delete", caught, request)
   }
 }

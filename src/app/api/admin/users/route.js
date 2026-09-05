@@ -9,6 +9,7 @@ import {
   validatePassword,
   validateUsername,
 } from "@/lib/security"
+import { enforceRateLimit } from "@/lib/rate-limit"
 
 export async function GET(request) {
   try {
@@ -39,7 +40,7 @@ export async function GET(request) {
       }))
     )
   } catch (caught) {
-    return handleRouteError("admin.users.list", caught)
+    return handleRouteError("admin.users.list", caught, request)
   }
 }
 
@@ -47,6 +48,7 @@ export async function POST(request) {
   try {
     assertSameOrigin(request)
     const admin = await requireAdmin(request)
+    await enforceRateLimit(request, { scope: "admin.users.create", actorId: admin.id, limit: 20, windowMs: 60 * 60 * 1000 })
     const body = await readJson(request, 8_192)
     const username = validateUsername(body.username)
     const email = validateEmail(body.email)
@@ -99,6 +101,6 @@ export async function POST(request) {
       201
     )
   } catch (caught) {
-    return handleRouteError("admin.users.create", caught)
+    return handleRouteError("admin.users.create", caught, request)
   }
 }

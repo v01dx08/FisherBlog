@@ -91,13 +91,13 @@ export default function ProfilePage({ params }) {
   }
 
   return (
-    <div className="min-h-screen bg-background overflow-x-hidden">
+    <main id="main-content" className="h-[100dvh] w-full overflow-hidden bg-background">
       <Header />
 
-      <div className="flex justify-center mx-auto max-w-[1600px] pt-20">
-        <LeftSidebar />
+      <div className="mx-auto grid h-full w-full max-w-[1580px] grid-cols-1 gap-5 overflow-hidden px-3 pb-[76px] pt-[76px] sm:px-5 md:pb-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,800px)_300px] xl:grid-cols-[280px_minmax(0,800px)_320px] xl:gap-6">
+        <div className="hidden xl:block"><LeftSidebar /></div>
 
-        <main id="main-content" className="flex-1 max-w-[800px] w-full px-4 pt-4 sm:px-6 pb-16 shrink-0">
+        <section className="custom-scrollbar min-h-0 min-w-0 overflow-y-auto pb-16 pt-4 lg:col-start-2">
           {loading ? (
             <div className="space-y-6 pt-8">
               <div className="h-44 rounded-3xl bg-muted animate-pulse" />
@@ -120,7 +120,7 @@ export default function ProfilePage({ params }) {
                   <div className="absolute inset-0 bg-primary/10 backdrop-blur-[1px]" />
                   <div className="absolute right-6 bottom-4 text-white/40 text-xs font-semibold uppercase tracking-wider flex items-center gap-1.5">
                     <ShieldCheck className="h-4 w-4" />
-                    Bản gốc được FishViet ghi nhận
+                    Bản gốc được Nhật ký ngày đi câu ghi nhận
                   </div>
                 </div>
 
@@ -336,9 +336,9 @@ export default function ProfilePage({ params }) {
               </div>
             </div>
           )}
-        </main>
+        </section>
 
-        <RightSidebar />
+        <div className="hidden lg:block lg:col-start-3"><RightSidebar /></div>
       </div>
 
       {profile && (
@@ -353,10 +353,10 @@ export default function ProfilePage({ params }) {
       )}
 
       {messageOpen && profile && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-md" onClick={() => setMessageOpen(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="message-dialog-title" onKeyDown={(event) => { if (event.key === "Escape") setMessageOpen(false) }} onClick={() => setMessageOpen(false)}>
           <form onSubmit={sendMessage} onClick={(event) => event.stopPropagation()} className="bezel w-full max-w-md">
             <div className="bezel-core p-6">
-              <h2 className="text-xl font-semibold">Nhắn cho {profile.displayName || profile.username}</h2>
+              <h2 id="message-dialog-title" className="text-xl font-semibold">Nhắn cho {profile.displayName || profile.username}</h2>
               <textarea autoFocus value={messageText} onChange={(event) => setMessageText(event.target.value)} maxLength={2000} placeholder="Viết tin nhắn..." className="mt-5 min-h-32 w-full resize-none rounded-[1.25rem] bg-muted p-4 text-sm outline-none" />
               <div className="mt-4 flex justify-end gap-2">
                 <Button type="button" variant="ghost" onClick={() => setMessageOpen(false)} className="rounded-full">Hủy</Button>
@@ -366,6 +366,6 @@ export default function ProfilePage({ params }) {
           </form>
         </div>
       )}
-    </div>
+    </main>
   )
 }

@@ -1,7 +1,7 @@
 "use client"
 
 import { AnimatePresence, motion } from "framer-motion"
-import { Bell, Check, EyeSlash, Lock, Moon, Sun, X } from "@phosphor-icons/react"
+import { Bell, Check, DownloadSimple, EyeSlash, Lock, Moon, Sun, X } from "@phosphor-icons/react"
 import { useEffect, useState } from "react"
 import { useTheme } from "@/components/ThemeProvider"
 
@@ -17,6 +17,8 @@ export function SettingsModal({ isOpen, onClose }) {
 
   useEffect(() => {
     if (!isOpen) return
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = "hidden"
     fetch("/api/settings")
       .then((response) => response.json())
       .then((data) => {
@@ -25,8 +27,14 @@ export function SettingsModal({ isOpen, onClose }) {
           setNotifyInteractions(data.notifyInteractions !== false)
         }
       })
-      .catch(() => {})
-  }, [isOpen])
+      .catch(() => setMessage("Không thể tải thiết lập."))
+    const onKeyDown = (event) => { if (event.key === "Escape") onClose() }
+    window.addEventListener("keydown", onKeyDown)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener("keydown", onKeyDown)
+    }
+  }, [isOpen, onClose])
 
   if (!isOpen) return null
 
@@ -71,7 +79,7 @@ export function SettingsModal({ isOpen, onClose }) {
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-md" onClick={onClose}>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="settings-title" onClick={onClose}>
         <motion.div
           initial={{ opacity: 0, y: 24, scale: 0.96 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -84,7 +92,7 @@ export function SettingsModal({ isOpen, onClose }) {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-primary">Tài khoản</p>
-                <h2 className="mt-2 text-2xl font-semibold tracking-[-0.03em]">Riêng tư và bảo mật</h2>
+                <h2 id="settings-title" className="mt-2 text-2xl font-semibold tracking-[-0.03em]">Riêng tư và bảo mật</h2>
               </div>
               <button type="button" onClick={onClose} aria-label="Đóng" className="kinetic flex h-9 w-9 items-center justify-center rounded-full hover:bg-muted"><X size={17} weight="light" /></button>
             </div>
@@ -112,6 +120,14 @@ export function SettingsModal({ isOpen, onClose }) {
                 <input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} placeholder="Mật khẩu mới: 10+ ký tự, hoa, thường, số" autoComplete="new-password" className="h-11 rounded-[1.1rem] bg-muted px-4 text-sm outline-none" />
                 <input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="Nhập lại mật khẩu mới" autoComplete="new-password" className="h-11 rounded-[1.1rem] bg-muted px-4 text-sm outline-none" />
               </div>
+            </div>
+
+            <div className="mt-8 border-t border-border/60 pt-7">
+              <div className="flex items-center gap-2"><DownloadSimple size={18} weight="light" className="text-primary" /><h3 className="text-sm font-semibold">Dữ liệu tài khoản</h3></div>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">Tải bản JSON gồm hồ sơ, bài viết, dấu vết chứng nhận và hoạt động của bạn.</p>
+              <a href="/api/account/export" download className="kinetic mt-4 inline-flex items-center gap-2 rounded-xl bg-muted px-4 py-2.5 text-xs font-semibold hover:bg-primary/10 hover:text-primary">
+                <DownloadSimple size={16} weight="light" /> Xuất dữ liệu
+              </a>
             </div>
 
             {message && <p role="status" className={`mt-5 rounded-2xl px-4 py-3 text-xs ${message.startsWith("Đã") ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive"}`}>{message}</p>}

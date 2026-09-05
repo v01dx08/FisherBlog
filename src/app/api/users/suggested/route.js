@@ -47,6 +47,6 @@ export async function GET(request) {
       }))
     )
   } catch (caught) {
-    return handleRouteError("users.suggested", caught)
+    return handleRouteError("users.suggested", caught, request)
   }
 }
