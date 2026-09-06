@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Camera, Fish, Globe, MapPin, Shield, Sparkles, Trash2, Video } from "lucide-react"
+import { AlertTriangle, Camera, Fish, Globe, MapPin, Shield, Sparkles, Trash2, Video } from "lucide-react"
+import { AvatarCropper } from "@/components/AvatarCropper"
 
 export function OnboardingModal({ isOpen, user, onComplete }) {
   const avatarInputRef = useRef(null)
@@ -16,7 +17,9 @@ export function OnboardingModal({ isOpen, user, onComplete }) {
   const [tiktokUrl, setTiktokUrl] = useState(user?.tiktokUrl || "")
   const [facebookUrl, setFacebookUrl] = useState(user?.facebookUrl || "")
   const [avatarFile, setAvatarFile] = useState(null)
+  const [pendingAvatarFile, setPendingAvatarFile] = useState(null)
   const [removeAvatar, setRemoveAvatar] = useState(false)
+  const [confirmRemoveAvatarOpen, setConfirmRemoveAvatarOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState("")
 
@@ -29,6 +32,14 @@ export function OnboardingModal({ isOpen, user, onComplete }) {
   }, [avatarPreview])
 
   if (!isOpen) return null
+
+  const confirmRemoveAvatar = () => {
+    setAvatarFile(null)
+    setPendingAvatarFile(null)
+    setRemoveAvatar(true)
+    setConfirmRemoveAvatarOpen(false)
+    if (avatarInputRef.current) avatarInputRef.current.value = ""
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -93,7 +104,7 @@ export function OnboardingModal({ isOpen, user, onComplete }) {
               <Sparkles className="h-6 w-6 text-primary-foreground" />
             </div>
             <div>
-              <h2 className="text-xl font-bold tracking-tight">Thiết lập Trang cá nhân Influencer</h2>
+              <h2 className="text-xl font-bold tracking-tight">Thiết lập Trang cá nhân </h2>
               <p className="text-xs text-muted-foreground">
                 Hoàn tất thông tin để kích hoạt chứng nhận bảo vệ quyền tác giả
               </p>
@@ -135,8 +146,7 @@ export function OnboardingModal({ isOpen, user, onComplete }) {
                       return
                     }
                     setErrorMsg("")
-                    setAvatarFile(file)
-                    setRemoveAvatar(false)
+                    setPendingAvatarFile(file)
                   }}
                 />
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -144,7 +154,7 @@ export function OnboardingModal({ isOpen, user, onComplete }) {
                     <Camera className="h-4 w-4" /> {avatarPreview ? "Đổi ảnh" : "Chọn ảnh"}
                   </Button>
                   {avatarPreview && (
-                    <Button type="button" variant="ghost" size="sm" onClick={() => { setAvatarFile(null); setRemoveAvatar(true); if (avatarInputRef.current) avatarInputRef.current.value = "" }} className="rounded-full gap-2 text-destructive hover:text-destructive">
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmRemoveAvatarOpen(true)} className="rounded-full gap-2 text-destructive hover:text-destructive">
                       <Trash2 className="h-4 w-4" /> Xóa ảnh
                     </Button>
                   )}
@@ -168,7 +178,7 @@ export function OnboardingModal({ isOpen, user, onComplete }) {
 
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                  Địa bàn / Điểm câu chính
+                  Điểm câu thường xuyên
                 </label>
                 <div className="relative">
                   <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -191,7 +201,7 @@ export function OnboardingModal({ isOpen, user, onComplete }) {
                 <Input
                   value={fishingStyle}
                   onChange={(e) => setFishingStyle(e.target.value)}
-                  placeholder="vd: Lure săn mồi nước ngọt, Shore Jigging biển"
+                  placeholder="vd: Câu Đài, Câu Lăng Xê, Câu Mồi Giả,..."
                   className="pl-9 h-10 rounded-xl bg-muted/40 border-border/60"
                 />
               </div>
@@ -257,6 +267,47 @@ export function OnboardingModal({ isOpen, user, onComplete }) {
               </Button>
             </div>
           </form>
+
+          <AvatarCropper
+            key={pendingAvatarFile ? `${pendingAvatarFile.name}-${pendingAvatarFile.size}-${pendingAvatarFile.lastModified}` : "avatar-cropper-empty"}
+            file={pendingAvatarFile}
+            onCancel={() => {
+              setPendingAvatarFile(null)
+              if (avatarInputRef.current) avatarInputRef.current.value = ""
+            }}
+            onApply={(croppedFile) => {
+              setAvatarFile(croppedFile)
+              setPendingAvatarFile(null)
+              setRemoveAvatar(false)
+              if (avatarInputRef.current) avatarInputRef.current.value = ""
+            }}
+          />
+
+          {confirmRemoveAvatarOpen && (
+            <div className="fixed inset-0 z-[75] flex items-center justify-center bg-background/85 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="remove-avatar-title" onClick={() => setConfirmRemoveAvatarOpen(false)}>
+              <div className="w-full max-w-sm rounded-2xl border border-border/70 bg-card p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+                <div className="flex items-start gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+                    <AlertTriangle className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h2 id="remove-avatar-title" className="text-base font-bold">Xóa ảnh đại diện?</h2>
+                    <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                      Ảnh đại diện sẽ bị gỡ khỏi hồ sơ sau khi bạn lưu thay đổi.
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-5 flex justify-end gap-2">
+                  <Button type="button" variant="outline" onClick={() => setConfirmRemoveAvatarOpen(false)} className="rounded-full">
+                    Hủy
+                  </Button>
+                  <Button type="button" variant="destructive" onClick={confirmRemoveAvatar} className="rounded-full">
+                    Xóa ảnh
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
         </motion.div>
       </div>
     </AnimatePresence>
