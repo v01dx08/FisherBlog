@@ -3,6 +3,7 @@ import path from "node:path"
 
 export const UPLOAD_DIR = path.resolve(/* turbopackIgnore: true */ process.env.UPLOAD_DIR || "data/uploads")
 export const MAX_UPLOAD_BYTES = 15 * 1024 * 1024
+export const MAX_AVATAR_BYTES = 5 * 1024 * 1024
 
 const ALLOWED_TYPES = new Map([
   ["image/jpeg", ".jpg"],
@@ -35,6 +36,21 @@ export function matchesFileSignature(buffer, mime) {
 
 export function mimeForFilename(filename) {
   return MIME_BY_EXTENSION.get(path.extname(filename).toLowerCase()) || "application/octet-stream"
+}
+
+export function avatarUploadFilename(value, expectedOrigin) {
+  if (!value) return null
+  try {
+    const url = new URL(value)
+    if (url.origin !== new URL(expectedOrigin).origin || url.search || url.hash) return null
+    return /^\/api\/uploads\/([a-f0-9-]{36}\.(?:jpg|png|webp|gif))$/.exec(url.pathname)?.[1] || null
+  } catch {
+    return null
+  }
+}
+
+export function isValidAvatarAsset(asset) {
+  return Boolean(asset?.mimeType?.startsWith("image/") && asset.size > 0 && asset.size <= MAX_AVATAR_BYTES)
 }
 
 export function safeUploadPath(filename) {

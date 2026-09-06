@@ -14,20 +14,25 @@ export async function GET(request, { params }) {
   if (!filePath) return error("Không tìm thấy tệp", 404)
 
   try {
-    const [asset, user] = await Promise.all([
+    const avatarPath = `/api/uploads/${filename}`
+    const [asset, user, avatarOwner] = await Promise.all([
       db.mediaAsset.findUnique({
         where: { filename },
         include: { post: { select: { visibility: true } } },
       }),
       getCurrentUser(request),
+      db.user.findFirst({
+        where: { status: "ACTIVE", avatarUrl: avatarPath },
+        select: { id: true },
+      }),
     ])
     if (!asset) return error("Không tìm thấy tệp", 404)
-    const canRead = asset.post?.visibility === "PUBLIC" || user?.id === asset.ownerId || user?.role === "ADMIN"
+    const isPublic = asset.post?.visibility === "PUBLIC" || Boolean(avatarOwner)
+    const canRead = isPublic || user?.id === asset.ownerId || user?.role === "ADMIN"
     if (!canRead) return error("Không tìm thấy tệp", 404)
 
     const file = await stat(filePath)
     const range = request.headers.get("range")
-    const isPublic = asset.post?.visibility === "PUBLIC"
     const headers = {
       "Content-Type": asset.mimeType || mimeForFilename(filename),
       "Accept-Ranges": "bytes",

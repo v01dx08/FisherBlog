@@ -1,12 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Shield, Sparkles, Video, Globe, MapPin, Fish } from "lucide-react"
+import { Camera, Fish, Globe, MapPin, Shield, Sparkles, Trash2, Video } from "lucide-react"
 
 export function OnboardingModal({ isOpen, user, onComplete }) {
+  const avatarInputRef = useRef(null)
   const [displayName, setDisplayName] = useState(user?.displayName || user?.username || "")
   const [bio, setBio] = useState(user?.bio || "")
   const [location, setLocation] = useState(user?.location || "")
@@ -14,8 +15,18 @@ export function OnboardingModal({ isOpen, user, onComplete }) {
   const [youtubeUrl, setYoutubeUrl] = useState(user?.youtubeUrl || "")
   const [tiktokUrl, setTiktokUrl] = useState(user?.tiktokUrl || "")
   const [facebookUrl, setFacebookUrl] = useState(user?.facebookUrl || "")
+  const [avatarFile, setAvatarFile] = useState(null)
+  const [removeAvatar, setRemoveAvatar] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState("")
+
+  const avatarPreview = useMemo(
+    () => avatarFile ? URL.createObjectURL(avatarFile) : removeAvatar ? "" : user?.avatarUrl || "",
+    [avatarFile, removeAvatar, user?.avatarUrl]
+  )
+  useEffect(() => () => {
+    if (avatarPreview.startsWith("blob:")) URL.revokeObjectURL(avatarPreview)
+  }, [avatarPreview])
 
   if (!isOpen) return null
 
@@ -25,11 +36,23 @@ export function OnboardingModal({ isOpen, user, onComplete }) {
     setSubmitting(true)
 
     try {
+      let avatarUrl = removeAvatar ? null : user?.avatarUrl || null
+      if (avatarFile) {
+        const form = new FormData()
+        form.set("file", avatarFile)
+        form.set("purpose", "avatar")
+        const uploadResponse = await fetch("/api/uploads", { method: "POST", body: form })
+        const uploadData = await uploadResponse.json()
+        if (!uploadResponse.ok) throw new Error(uploadData.error || "Không thể tải ảnh đại diện.")
+        avatarUrl = new URL(uploadData.url, window.location.origin).toString()
+      }
+
       const res = await fetch(`/api/users/${user.username}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           displayName: displayName.trim(),
+          avatarUrl,
           bio: bio.trim(),
           location: location.trim(),
           fishingStyle: fishingStyle.trim(),
@@ -42,16 +65,15 @@ export function OnboardingModal({ isOpen, user, onComplete }) {
       const data = await res.json()
 
       if (!res.ok) {
-        setErrorMsg(data.error || "Không thể lưu thông tin hồ sơ.")
-        setSubmitting(false)
-        return
+        throw new Error(data.error || "Không thể lưu thông tin hồ sơ.")
       }
 
       if (onComplete) {
         onComplete(data)
       }
-    } catch {
-      setErrorMsg("Lỗi kết nối máy chủ khi lưu hồ sơ.")
+      window.dispatchEvent(new CustomEvent("profile-updated", { detail: data }))
+    } catch (caught) {
+      setErrorMsg(caught.message || "Lỗi kết nối máy chủ khi lưu hồ sơ.")
     } finally {
       setSubmitting(false)
     }
@@ -92,6 +114,44 @@ export function OnboardingModal({ isOpen, user, onComplete }) {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="flex flex-col gap-4 rounded-2xl border border-border/60 bg-muted/35 p-4 sm:flex-row sm:items-center">
+              <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary text-2xl font-bold text-primary-foreground ring-4 ring-background shadow-lg">
+                {avatarPreview ? <img src={avatarPreview} alt="Xem trước ảnh đại diện" className="h-full w-full object-cover" /> : (displayName || user?.username || "NK").slice(0, 2).toUpperCase()}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-bold">Ảnh đại diện</p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">JPG, PNG, WebP hoặc GIF. Tối đa 5 MB.</p>
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0]
+                    if (!file) return
+                    if (!["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type) || file.size > 5 * 1024 * 1024) {
+                      setErrorMsg("Ảnh đại diện phải là JPG, PNG, WebP hoặc GIF và nhỏ hơn 5 MB.")
+                      event.target.value = ""
+                      return
+                    }
+                    setErrorMsg("")
+                    setAvatarFile(file)
+                    setRemoveAvatar(false)
+                  }}
+                />
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => avatarInputRef.current?.click()} className="rounded-full gap-2">
+                    <Camera className="h-4 w-4" /> {avatarPreview ? "Đổi ảnh" : "Chọn ảnh"}
+                  </Button>
+                  {avatarPreview && (
+                    <Button type="button" variant="ghost" size="sm" onClick={() => { setAvatarFile(null); setRemoveAvatar(true); if (avatarInputRef.current) avatarInputRef.current.value = "" }} className="rounded-full gap-2 text-destructive hover:text-destructive">
+                      <Trash2 className="h-4 w-4" /> Xóa ảnh
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">

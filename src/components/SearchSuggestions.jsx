@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Hash, User, FileText, ArrowRight, Loader2 } from "lucide-react"
 import Link from "next/link"
 
@@ -34,6 +34,7 @@ export function SearchSuggestions({ query = "", isOpen, onClose }) {
                 users.slice(0, 3).map((u) => ({
                   username: u.username,
                   name: u.name,
+                  avatarUrl: u.avatarUrl,
                   location: u.specialty || "",
                 }))
               )
@@ -95,6 +96,7 @@ export function SearchSuggestions({ query = "", isOpen, onClose }) {
                   className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-muted/80 transition-colors group"
                 >
                   <Avatar className="h-7 w-7">
+                    {angler.avatarUrl && <AvatarImage src={angler.avatarUrl} alt={angler.name || angler.username} className="object-cover" />}
                     <AvatarFallback className="bg-primary/10 text-primary font-bold text-[10px]">
                       {(angler.name || angler.username).slice(0, 2).toUpperCase()}
                     </AvatarFallback>

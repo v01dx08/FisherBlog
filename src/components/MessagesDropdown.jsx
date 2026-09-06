@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { MessageCircle, Send, ArrowLeft, CheckCheck, Loader2 } from "lucide-react"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
 function formatTimeAgo(dateString) {
   const date = new Date(dateString)
@@ -190,6 +190,7 @@ export function MessagesDropdown() {
                         }`}
                       >
                         <Avatar className="h-10 w-10 shrink-0">
+                          {other.avatarUrl && <AvatarImage src={other.avatarUrl} alt={other.displayName || other.username} className="object-cover" />}
                           <AvatarFallback className="bg-primary/10 text-primary font-bold text-xs">
                             {initials}
                           </AvatarFallback>

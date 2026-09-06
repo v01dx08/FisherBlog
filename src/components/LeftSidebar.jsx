@@ -16,7 +16,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useEffect, useState } from "react"
 import { SettingsModal } from "@/components/SettingsModal"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
 export function LeftSidebar() {
   const pathname = usePathname()
@@ -37,6 +37,12 @@ export function LeftSidebar() {
     return () => { active = false }
   }, [])
 
+  useEffect(() => {
+    const updateProfile = (event) => setCurrentUser((user) => user ? { ...user, ...event.detail } : user)
+    window.addEventListener("profile-updated", updateProfile)
+    return () => window.removeEventListener("profile-updated", updateProfile)
+  }, [])
+
   const navItems = [
     { name: "Bảng tin", icon: House, href: "/", active: pathname === "/" },
     { name: "Khám phá", icon: Compass, href: "/explore", active: pathname === "/explore" },
@@ -53,6 +59,7 @@ export function LeftSidebar() {
         {currentUser ? (
           <Link href={`/profile/${currentUser.username}`} className="kinetic mb-3 flex items-center gap-3 rounded-xl p-3 hover:bg-muted/75">
             <Avatar className="h-10 w-10 ring-2 ring-primary/25">
+              {currentUser.avatarUrl && <AvatarImage src={currentUser.avatarUrl} alt={currentUser.displayName || currentUser.username} className="object-cover" />}
               <AvatarFallback className="bg-primary text-xs font-bold text-primary-foreground">{initials}</AvatarFallback>
             </Avatar>
             <div className="min-w-0">

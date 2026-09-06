@@ -17,7 +17,7 @@ import Link from "next/link"
 import Image from "next/image"
 import { usePathname, useRouter } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { MessagesDropdown } from "@/components/MessagesDropdown"
 import { NotificationsDropdown } from "@/components/NotificationsDropdown"
 import { SearchSuggestions } from "@/components/SearchSuggestions"
@@ -48,6 +48,12 @@ export function Header({ onNewPostClick }) {
       .then((data) => active && setCurrentUser(data.user || null))
       .catch(() => active && setCurrentUser(null))
     return () => { active = false }
+  }, [])
+
+  useEffect(() => {
+    const updateProfile = (event) => setCurrentUser((user) => user ? { ...user, ...event.detail } : user)
+    window.addEventListener("profile-updated", updateProfile)
+    return () => window.removeEventListener("profile-updated", updateProfile)
   }, [])
 
   useEffect(() => {
@@ -147,6 +153,7 @@ export function Header({ onNewPostClick }) {
               <div ref={profileRef} className="relative">
                 <button type="button" onClick={() => setProfileOpen((open) => !open)} aria-expanded={profileOpen} aria-label="Mở menu tài khoản" className="kinetic rounded-full p-0.5 hover:bg-muted">
                   <Avatar className="h-9 w-9 ring-2 ring-primary/30">
+                    {currentUser.avatarUrl && <AvatarImage src={currentUser.avatarUrl} alt={currentUser.displayName || currentUser.username} className="object-cover" />}
                     <AvatarFallback className="bg-primary text-xs font-bold text-primary-foreground">{initials}</AvatarFallback>
                   </Avatar>
                 </button>

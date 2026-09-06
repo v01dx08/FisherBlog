@@ -86,6 +86,12 @@ export function validateHttpUrl(value, name = "Đường dẫn") {
   return url.toString()
 }
 
+export function assertOwnProfile(actorId, targetId) {
+  if (!actorId || actorId !== targetId) {
+    throw new RequestError("Không có quyền chỉnh sửa hồ sơ này", 403)
+  }
+}
+
 export function clampLimit(value, fallback = 12, ceiling = 30) {
   const parsed = Number.parseInt(value || "", 10)
   return Number.isFinite(parsed) ? Math.min(Math.max(parsed, 1), ceiling) : fallback

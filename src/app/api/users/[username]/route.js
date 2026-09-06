@@ -2,8 +2,9 @@ import { db } from "@/lib/db"
 import { getCurrentUser, requireUser } from "@/lib/auth"
 import { error, handleRouteError, json, readJson, RequestError } from "@/lib/http"
 import { serializePost } from "@/lib/posts"
-import { assertSameOrigin, normalizeIdentity, optionalText, validateHttpUrl } from "@/lib/security"
+import { assertOwnProfile, assertSameOrigin, normalizeIdentity, optionalText, validateHttpUrl } from "@/lib/security"
 import { enforceRateLimit } from "@/lib/rate-limit"
+import { avatarUploadFilename, isValidAvatarAsset } from "@/lib/storage"
 
 const authorSelect = {
   id: true,
@@ -108,23 +109,36 @@ export async function PUT(request, { params }) {
       where: { OR: [{ usernameNormalized: normalizeIdentity(username) }, { id: username }] },
     })
     if (!target) return error("Không tìm thấy người dùng", 404)
-    if (target.id !== actor.id && actor.role !== "ADMIN") {
-      throw new RequestError("Không có quyền chỉnh sửa hồ sơ này", 403)
-    }
+    assertOwnProfile(actor.id, target.id)
 
     const body = await readJson(request, 24_576)
-    const data = {
-      displayName: optionalText(body.displayName, { name: "Tên hiển thị", max: 80 }),
-      avatarUrl: validateHttpUrl(body.avatarUrl, "Ảnh đại diện"),
-      bio: optionalText(body.bio, { name: "Tiểu sử", max: 500 }),
-      location: optionalText(body.location, { name: "Địa điểm", max: 120 }),
-      fishingStyle: optionalText(body.fishingStyle, { name: "Sở trường", max: 120 }),
-      youtubeUrl: validateHttpUrl(body.youtubeUrl, "YouTube"),
-      tiktokUrl: validateHttpUrl(body.tiktokUrl, "TikTok"),
-      facebookUrl: validateHttpUrl(body.facebookUrl, "Facebook"),
-      instagramUrl: validateHttpUrl(body.instagramUrl, "Instagram"),
-      isProfileCompleted: true,
+    const data = { isProfileCompleted: true }
+    if (Object.hasOwn(body, "avatarUrl")) {
+      let avatarUrl = validateHttpUrl(body.avatarUrl, "Ảnh đại diện")
+      if (avatarUrl) {
+        const filename = avatarUploadFilename(avatarUrl, request.headers.get("origin") || new URL(request.url).origin)
+        if (new URL(avatarUrl).pathname.startsWith("/api/uploads/") && !filename) {
+          throw new RequestError("Ảnh đại diện tải lên không hợp lệ", 400)
+        }
+        if (filename) {
+          const asset = await db.mediaAsset.findUnique({ where: { filename } })
+          if (!asset || asset.ownerId !== target.id || !isValidAvatarAsset(asset)) {
+            throw new RequestError("Ảnh đại diện không hợp lệ hoặc không thuộc tài khoản này", 400)
+          }
+          avatarUrl = `/api/uploads/${filename}`
+        }
+      }
+      data.avatarUrl = avatarUrl
     }
+
+    if (Object.hasOwn(body, "displayName")) data.displayName = optionalText(body.displayName, { name: "Tên hiển thị", max: 80 })
+    if (Object.hasOwn(body, "bio")) data.bio = optionalText(body.bio, { name: "Tiểu sử", max: 500 })
+    if (Object.hasOwn(body, "location")) data.location = optionalText(body.location, { name: "Địa điểm", max: 120 })
+    if (Object.hasOwn(body, "fishingStyle")) data.fishingStyle = optionalText(body.fishingStyle, { name: "Sở trường", max: 120 })
+    if (Object.hasOwn(body, "youtubeUrl")) data.youtubeUrl = validateHttpUrl(body.youtubeUrl, "YouTube")
+    if (Object.hasOwn(body, "tiktokUrl")) data.tiktokUrl = validateHttpUrl(body.tiktokUrl, "TikTok")
+    if (Object.hasOwn(body, "facebookUrl")) data.facebookUrl = validateHttpUrl(body.facebookUrl, "Facebook")
+    if (Object.hasOwn(body, "instagramUrl")) data.instagramUrl = validateHttpUrl(body.instagramUrl, "Instagram")
 
     const updated = await db.user.update({
       where: { id: target.id },

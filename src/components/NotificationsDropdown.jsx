@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Bell, Fish, MessageCircle, ShieldCheck, UserPlus, Check, Loader2 } from "lucide-react"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import Link from "next/link"
 
 const ICON_MAP = {
@@ -154,6 +154,7 @@ export function NotificationsDropdown() {
                     >
                       <div className="relative shrink-0">
                         <Avatar className="h-9 w-9">
+                          {notif.actor?.avatarUrl && <AvatarImage src={notif.actor.avatarUrl} alt={actorName} className="object-cover" />}
                           <AvatarFallback className="bg-primary/10 text-primary font-bold text-xs">
                             {actorInitials}
                           </AvatarFallback>

@@ -21,7 +21,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion"
 import { useState, useEffect } from "react"
 import { Header } from "@/components/Header"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { AdminLineChart } from "@/components/AdminLineChart"
 import Link from "next/link"
 
@@ -389,6 +389,7 @@ export default function AdminDashboard() {
                     >
                       <Link href={`/profile/${user.username}`}>
                         <Avatar className="h-11 w-11 cursor-pointer">
+                          {user.avatarUrl && <AvatarImage src={user.avatarUrl} alt={user.username} className="object-cover" />}
                           <AvatarFallback className="bg-primary/10 text-primary font-bold text-sm">
                             {user.username.slice(0, 2).toUpperCase()}
                           </AvatarFallback>

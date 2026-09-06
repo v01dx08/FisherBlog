@@ -5,7 +5,7 @@ import { Header } from "@/components/Header"
 import { LeftSidebar } from "@/components/LeftSidebar"
 import { RightSidebar } from "@/components/RightSidebar"
 import { PostCard } from "@/components/FeedComponents"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import {
   ShieldCheck,
@@ -56,7 +56,7 @@ export default function ProfilePage({ params }) {
   const isOwner =
     currentUser &&
     profile &&
-    (currentUser.id === profile.id || currentUser.role === "ADMIN")
+    currentUser.id === profile.id
 
   const initials = profile?.displayName
     ? profile.displayName.slice(0, 2).toUpperCase()
@@ -129,6 +129,7 @@ export default function ProfilePage({ params }) {
                   <div className="flex flex-col sm:flex-row sm:items-end justify-between -mt-14 mb-4 gap-4">
                     <div className="flex items-end gap-4">
                       <Avatar className="h-28 w-28 ring-4 ring-card shadow-xl">
+                        {profile.avatarUrl && <AvatarImage src={profile.avatarUrl} alt={profile.displayName || profile.username} className="object-cover" />}
                         <AvatarFallback className="bg-primary text-primary-foreground font-bold text-3xl">
                           {initials}
                         </AvatarFallback>

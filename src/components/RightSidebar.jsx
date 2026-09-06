@@ -4,7 +4,7 @@ import { Check, Fingerprint, Fish, Info, LinkSimple, MapPin, Medal, Plus, Upload
 import Link from "next/link"
 import { useEffect, useState } from "react"
 import { WaterConditionsModal } from "@/components/WaterConditionsModal"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
 export function RightSidebar() {
   const [anglers, setAnglers] = useState([])
@@ -66,6 +66,7 @@ export function RightSidebar() {
                 <div key={angler.username} className="flex items-center gap-3">
                   <Link href={`/profile/${angler.username}`}>
                     <Avatar className="h-10 w-10 ring-1 ring-primary/25">
+                      {angler.avatarUrl && <AvatarImage src={angler.avatarUrl} alt={angler.name || angler.username} className="object-cover" />}
                       <AvatarFallback className="bg-primary/12 text-xs font-bold text-primary">{(angler.name || angler.username).slice(0, 2).toUpperCase()}</AvatarFallback>
                     </Avatar>
                   </Link>

@@ -23,7 +23,7 @@ import {
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import * as React from "react"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { MediaGrid } from "@/components/MediaGrid"
 
 function formatTimeAgo(value) {
@@ -136,6 +136,7 @@ export function CreatePostBox({ onPostCreated, currentUser }) {
       <form onSubmit={submit} className="p-4 sm:p-5">
         <div className="flex gap-3">
           <Avatar className="h-11 w-11 ring-1 ring-primary/20">
+            {currentUser?.avatarUrl && <AvatarImage src={currentUser.avatarUrl} alt={currentUser.displayName || currentUser.username} className="object-cover" />}
             <AvatarFallback className="bg-primary font-semibold text-primary-foreground">{initials}</AvatarFallback>
           </Avatar>
           <button
@@ -382,6 +383,7 @@ export function PostCard({
         <header className="flex items-start justify-between gap-3 p-4 sm:p-5">
           <Link href={`/profile/${authorUsername}`} className="group flex min-w-0 items-center gap-3">
             <Avatar className="h-11 w-11 ring-1 ring-primary/20">
+              {authorObject.avatarUrl && <AvatarImage src={authorObject.avatarUrl} alt={authorName} className="object-cover" />}
               <AvatarFallback className="bg-secondary text-sm font-semibold text-secondary-foreground">{initials}</AvatarFallback>
             </Avatar>
             <div className="min-w-0">
@@ -472,7 +474,7 @@ export function PostCard({
                   const name = item.author?.displayName || item.author?.username || "Cần thủ"
                   return (
                     <div key={item.id} className="flex gap-2.5">
-                      <Avatar className="h-8 w-8"><AvatarFallback className="bg-secondary text-[10px] font-semibold">{name.slice(0, 2).toUpperCase()}</AvatarFallback></Avatar>
+                      <Avatar className="h-8 w-8">{item.author?.avatarUrl && <AvatarImage src={item.author.avatarUrl} alt={name} className="object-cover" />}<AvatarFallback className="bg-secondary text-[10px] font-semibold">{name.slice(0, 2).toUpperCase()}</AvatarFallback></Avatar>
                       <div className="flex-1 rounded-xl bg-card px-4 py-3 ring-1 ring-border/60">
                         <div className="flex justify-between gap-2">
                           <span className="text-xs font-semibold">{name}</span>

@@ -74,6 +74,6 @@ Backup cả media volume trước mỗi release có thay đổi storage.
 
  ## Tài khoản admin test
 
-  - Username: fishviet_admin
-  - Email: admin.test@fishviet.vn
-  - Password: FishViet@Test2026!
+Username: fishviet_admin
+Email: quang722008@gmail.com
+Password: Aa1-d6aaefc31fc511b358492d4388a105b2f4b1b2e7

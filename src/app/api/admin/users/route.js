@@ -18,6 +18,7 @@ export async function GET(request) {
       select: {
         id: true,
         username: true,
+        avatarUrl: true,
         email: true,
         role: true,
         status: true,
@@ -32,6 +33,7 @@ export async function GET(request) {
       users.map((user) => ({
         id: user.id,
         username: user.username,
+        avatarUrl: user.avatarUrl,
         email: user.email,
         role: user.role,
         status: user.status,

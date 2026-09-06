@@ -62,13 +62,34 @@ assert.equal(login.response.status, 200)
 const cookie = login.response.headers.get("set-cookie")?.split(";", 1)[0]
 assert.ok(cookie)
 
-const smokeScopes = ["account.export", "posts.create", "posts.delete", "uploads.create", "posts.publications"]
+const smokeScopes = ["account.export", "posts.create", "posts.delete", "uploads.create", "posts.publications", "users.update"]
 const smokeRateLimitKeys = smokeScopes.map((scope) => createHash("sha256")
   .update(`${scope}:${login.data.user.id}`)
   .digest("hex"))
 await db.rateLimit.deleteMany({ where: { key: { in: smokeRateLimitKeys } } })
 
 const authenticatedHeaders = { ...originHeaders, Cookie: cookie }
+const authorizationNonce = Date.now()
+const authorizationTarget = await db.user.create({
+  data: {
+    username: `smoke_authz_${authorizationNonce}`,
+    usernameNormalized: `smoke_authz_${authorizationNonce}`,
+    email: `smoke-authz-${authorizationNonce}@example.com`,
+    emailNormalized: `smoke-authz-${authorizationNonce}@example.com`,
+    password: "not-used",
+  },
+})
+try {
+  const forbiddenProfileUpdate = await request(`/api/users/${authorizationTarget.username}`, {
+    method: "PUT",
+    headers: authenticatedHeaders,
+    body: JSON.stringify({ displayName: "Admin không được sửa" }),
+  })
+  assert.equal(forbiddenProfileUpdate.response.status, 403)
+} finally {
+  await db.user.delete({ where: { id: authorizationTarget.id } })
+}
+
 const stalePosts = await request(`/api/posts?q=${encodeURIComponent(smokePostContent)}&limit=30`)
 for (const post of stalePosts.data?.items || []) {
   if (post.content === smokePostContent) {
@@ -84,6 +105,7 @@ assert.ok(stats.data.kpis.totalUsers >= 1)
 const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zl1sAAAAASUVORK5CYII=", "base64")
 const form = new FormData()
 form.set("file", new File([png], "catch.png", { type: "image/png" }))
+form.set("purpose", "avatar")
 const uploadResponse = await fetch(`${baseUrl}/api/uploads`, {
   method: "POST",
   headers: { Origin: baseUrl, Cookie: cookie },
@@ -100,6 +122,19 @@ const ownerMedia = await fetch(`${baseUrl}${upload.url}`, { headers: { Cookie: c
 assert.equal(ownerMedia.status, 200)
 assert.match(ownerMedia.headers.get("cache-control") || "", /private, no-store/)
 assert.equal(ownerMedia.headers.get("etag"), `"sha256-${upload.sha256}"`)
+
+const originalProfile = await request(`/api/users/${process.env.ADMIN_USERNAME}`, { headers: { Cookie: cookie } })
+assert.equal(originalProfile.response.status, 200)
+const avatarUpdate = await request(`/api/users/${process.env.ADMIN_USERNAME}`, {
+  method: "PUT",
+  headers: authenticatedHeaders,
+  body: JSON.stringify({ avatarUrl: new URL(upload.url, baseUrl).toString() }),
+})
+assert.equal(avatarUpdate.response.status, 200, JSON.stringify(avatarUpdate.data))
+assert.equal(avatarUpdate.data.avatarUrl, upload.url)
+const publicAvatar = await fetch(`${baseUrl}${upload.url}`)
+assert.equal(publicAvatar.status, 200)
+assert.match(publicAvatar.headers.get("cache-control") || "", /public/)
 
 const suffixRange = await fetch(`${baseUrl}${upload.url}`, {
   headers: { Cookie: cookie, Range: "bytes=-8" },
@@ -173,6 +208,13 @@ const removedPublication = await request(`/api/posts/${created.data.id}/publicat
 })
 assert.equal(removedPublication.response.status, 200)
 
+const restoredAvatar = await request(`/api/users/${process.env.ADMIN_USERNAME}`, {
+  method: "PUT",
+  headers: authenticatedHeaders,
+  body: JSON.stringify({ avatarUrl: originalProfile.data.avatarUrl }),
+})
+assert.equal(restoredAvatar.response.status, 200)
+
 const removed = await request(`/api/posts/${created.data.id}`, {
   method: "DELETE",
   headers: authenticatedHeaders,
@@ -181,4 +223,4 @@ assert.equal(removed.response.status, 200)
 
 await db.$disconnect()
 
-console.log("Smoke test passed: security headers, SEO, auth, media privacy/range, proof v2, export, publication, cleanup")
+console.log("Smoke test passed: security headers, SEO, auth, profile ownership, avatar, media privacy/range, proof v2, export, publication, cleanup")
