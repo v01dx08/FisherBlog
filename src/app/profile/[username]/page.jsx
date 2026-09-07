@@ -118,29 +118,29 @@ export default function ProfilePage({ params }) {
                 {/* Cover Banner */}
                 <div className="h-40 bg-gradient-to-r from-sky-600 via-cyan-700 to-teal-800 relative overflow-hidden">
                   <div className="absolute inset-0 bg-primary/10 backdrop-blur-[1px]" />
-                  <div className="absolute right-6 bottom-4 text-white/40 text-xs font-semibold uppercase tracking-wider flex items-center gap-1.5">
+                  <div className="absolute right-6 bottom-4 hidden items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-white/40 sm:flex">
                     <ShieldCheck className="h-4 w-4" />
                     Bản gốc được Nhật ký ngày đi câu ghi nhận
                   </div>
                 </div>
 
                 {/* Profile Header Info */}
-                <div className="px-6 pb-6 pt-0 relative">
-                  <div className="flex flex-col sm:flex-row sm:items-end justify-between -mt-14 mb-4 gap-4">
-                    <div className="flex items-end gap-4">
+                <div className="relative px-4 pb-6 pt-0 sm:px-6">
+                  <div className="-mt-14 mb-4 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+                    <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-end sm:gap-4">
                       <Avatar className="h-28 w-28 ring-4 ring-card shadow-xl">
                         {profile.avatarUrl && <AvatarImage src={profile.avatarUrl} alt={profile.displayName || profile.username} className="object-cover" />}
                         <AvatarFallback className="bg-primary text-primary-foreground font-bold text-3xl">
                           {initials}
                         </AvatarFallback>
                       </Avatar>
-                      <div className="mb-2">
-                        <div className="flex items-center gap-2">
-                          <h1 className="text-2xl font-bold">
+                      <div className="mb-0 min-w-0 sm:mb-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h1 className="min-w-0 break-words text-2xl font-bold leading-tight">
                             {profile.displayName || profile.username}
                           </h1>
                           <span
-                            className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary"
+                            className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary"
                             title="Tài khoản Influencer đã xác minh quyền tác giả"
                           >
                             <ShieldCheck className="h-3.5 w-3.5" />
@@ -156,7 +156,7 @@ export default function ProfilePage({ params }) {
                         size="sm"
                         variant="outline"
                         onClick={() => setEditModalOpen(true)}
-                        className="rounded-full gap-2 text-xs font-semibold self-start sm:self-end"
+                        className="self-start rounded-full gap-2 text-xs font-semibold sm:self-end"
                       >
                         <Edit3 className="h-3.5 w-3.5" />
                         Chỉnh sửa hồ sơ
@@ -259,7 +259,7 @@ export default function ProfilePage({ params }) {
                     <span className="text-xl font-bold text-foreground">
                       {profile.posts?.length || 0}
                     </span>
-                    <p className="text-[11px] text-muted-foreground uppercase font-semibold">
+                    <p className="text-[10px] font-semibold uppercase text-muted-foreground sm:text-[11px]">
                       Bài viết gốc
                     </p>
                   </div>
@@ -267,17 +267,17 @@ export default function ProfilePage({ params }) {
                     <span className="text-xl font-bold text-foreground">
                       {profile._count?.comments || 0}
                     </span>
-                    <p className="text-[11px] text-muted-foreground uppercase font-semibold">
+                    <p className="text-[10px] font-semibold uppercase text-muted-foreground sm:text-[11px]">
                       Lượt phản hồi
                     </p>
                   </div>
                   <div>
                     <span className="text-xl font-bold text-foreground">{profile._count?.followers || 0}</span>
-                    <p className="text-[11px] text-muted-foreground uppercase font-semibold">Người theo dõi</p>
+                    <p className="text-[10px] font-semibold uppercase text-muted-foreground sm:text-[11px]">Người theo dõi</p>
                   </div>
                   <div>
                     <span className="text-xl font-bold text-foreground">{profile._count?.following || 0}</span>
-                    <p className="text-[11px] text-muted-foreground uppercase font-semibold">Đang theo dõi</p>
+                    <p className="text-[10px] font-semibold uppercase text-muted-foreground sm:text-[11px]">Đang theo dõi</p>
                   </div>
                 </div>
               </div>
@@ -310,10 +310,11 @@ export default function ProfilePage({ params }) {
                     >
                       <PostCard
                         author={{
-                          id: profile.id,
-                          username: profile.username,
-                          displayName: profile.displayName,
-                          role: profile.role,
+                          id: post.author?.id || profile.id,
+                          username: post.author?.username || profile.username,
+                          displayName: post.author?.displayName || profile.displayName,
+                          role: post.author?.role || profile.role,
+                          avatarUrl: post.author?.avatarUrl || profile.avatarUrl,
                         }}
                         time={post.createdAt}
                         content={post.content}
@@ -346,6 +347,7 @@ export default function ProfilePage({ params }) {
         <OnboardingModal
           isOpen={editModalOpen}
           user={profile}
+          onClose={() => setEditModalOpen(false)}
           onComplete={(updated) => {
             setProfile((prev) => ({ ...prev, ...updated }))
             setEditModalOpen(false)

@@ -134,7 +134,7 @@ export function AvatarCropper({ file, onCancel, onApply }) {
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
             <h2 id="avatar-crop-title" className="text-base font-bold">Căn chỉnh ảnh đại diện</h2>
-            <p className="mt-1 text-xs text-muted-foreground">éo ảnh để đặt khuôn mặt vào vòng tròn.</p>
+            <p className="mt-1 text-xs text-muted-foreground">Kéo ảnh để đặt khuôn mặt vào vòng tròn.</p>
           </div>
           <button type="button" onClick={onCancel} aria-label="Dong" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full hover:bg-muted">
             <X className="h-4 w-4" />

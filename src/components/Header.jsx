@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from "framer-motion"
 import {
   BookmarkSimple,
+  ChatCircle,
   Compass,
   Gear,
   House,
@@ -18,7 +19,6 @@ import Image from "next/image"
 import { usePathname, useRouter } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { MessagesDropdown } from "@/components/MessagesDropdown"
 import { NotificationsDropdown } from "@/components/NotificationsDropdown"
 import { SearchSuggestions } from "@/components/SearchSuggestions"
 import { SettingsModal } from "@/components/SettingsModal"
@@ -28,6 +28,7 @@ const navigation = [
   { label: "Bảng tin", href: "/", icon: House, match: "home" },
   { label: "Khám phá", href: "/explore", icon: Compass, match: "explore" },
   { label: "Đã lưu", href: "/?saved=true", icon: BookmarkSimple, match: "saved" },
+  { label: "Tin nhắn", href: "/messages", icon: ChatCircle, match: "messages" },
 ]
 
 export function Header({ onNewPostClick }) {
@@ -82,6 +83,7 @@ export function Header({ onNewPostClick }) {
 
   const isActive = (item) => {
     if (item.match === "explore") return pathname === "/explore"
+    if (item.match === "messages") return pathname === "/messages"
     if (item.match === "saved") return false
     return pathname === "/"
   }
@@ -145,7 +147,6 @@ export function Header({ onNewPostClick }) {
               </button>
             )}
 
-            {currentUser && <MessagesDropdown />}
             {currentUser && <NotificationsDropdown />}
             <ThemeToggle />
 
@@ -198,7 +199,7 @@ export function Header({ onNewPostClick }) {
         </div>
       </header>
 
-      <nav className="app-header fixed inset-x-0 bottom-0 z-40 grid h-16 grid-cols-4 px-2 md:hidden" aria-label="Điều hướng di động">
+      <nav className="app-header fixed inset-x-0 bottom-0 z-40 grid h-16 grid-cols-5 px-2 md:hidden" aria-label="Điều hướng di động">
         {navigation.slice(0, 2).map((item) => {
           const active = isActive(item)
           return (
@@ -207,10 +208,26 @@ export function Header({ onNewPostClick }) {
             </Link>
           )
         })}
-        <button type="button" onClick={onNewPostClick} disabled={!onNewPostClick} className="flex flex-col items-center justify-center gap-1 text-[10px] font-semibold text-primary disabled:text-muted-foreground">
-          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground"><Plus size={18} weight="bold" /></span>
-          Viết bài
-        </button>
+        {onNewPostClick ? (
+          <button type="button" onClick={onNewPostClick} className="flex flex-col items-center justify-center gap-1 text-[10px] font-semibold text-primary">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground"><Plus size={18} weight="bold" /></span>
+            Viết bài
+          </button>
+        ) : (
+          <Link href="/" className="flex flex-col items-center justify-center gap-1 text-[10px] font-semibold text-primary">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground"><Plus size={18} weight="bold" /></span>
+            Viết bài
+          </Link>
+        )}
+        {currentUser ? (
+          <Link href="/messages" className={`flex flex-col items-center justify-center gap-1 text-[10px] font-semibold ${isActive(navigation[3]) ? "text-primary" : "text-muted-foreground"}`}>
+            <ChatCircle size={22} weight={isActive(navigation[3]) ? "fill" : "regular"} /> Tin nhắn
+          </Link>
+        ) : (
+          <Link href="/login" className="flex flex-col items-center justify-center gap-1 text-[10px] font-semibold text-muted-foreground">
+            <SignIn size={22} weight="regular" /> Tin nhắn
+          </Link>
+        )}
         <Link href="/?saved=true" className={`flex flex-col items-center justify-center gap-1 text-[10px] font-semibold ${isActive(navigation[2]) ? "text-primary" : "text-muted-foreground"}`}>
           <BookmarkSimple size={22} weight={isActive(navigation[2]) ? "fill" : "regular"} /> Đã lưu
         </Link>

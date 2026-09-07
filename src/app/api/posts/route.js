@@ -16,6 +16,11 @@ function localUploadFilename(value) {
   }
 }
 
+function validateMediaUrlList(value, name) {
+  if (!Array.isArray(value)) return []
+  return value.slice(0, 10).map((url, index) => validateHttpUrl(url, `${name} ${index + 1}`)).filter(Boolean)
+}
+
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url)
@@ -39,7 +44,11 @@ export async function POST(request) {
     await enforceRateLimit(request, { scope: "posts.create", actorId: author.id, limit: 30, windowMs: 60 * 60 * 1000 })
     const body = await readJson(request)
     const content = cleanText(body.content, { name: "Nội dung bài viết", min: 3, max: 3_000 })
-    const imageUrl = validateHttpUrl(body.imageUrl, "Đường dẫn ảnh")
+    const imageUrls = validateMediaUrlList(body.imageUrls, "Đường dẫn ảnh")
+    const fallbackImageUrl = imageUrls.length ? null : validateHttpUrl(body.imageUrl, "Đường dẫn ảnh")
+    const imageUrl = imageUrls.length > 1
+      ? JSON.stringify(imageUrls)
+      : imageUrls[0] || fallbackImageUrl
     const videoUrl = validateHttpUrl(body.videoUrl, "Đường dẫn video")
     const species = optionalText(body.species, { name: "Loài cá", max: 80 })
     const spotName = optionalText(body.spotName, { name: "Điểm câu", max: 120 })
@@ -53,7 +62,11 @@ export async function POST(request) {
     }
 
     const createdAt = new Date()
-    const filenames = [...new Set([localUploadFilename(imageUrl), localUploadFilename(videoUrl)].filter(Boolean))]
+    const filenames = [...new Set([
+      ...imageUrls.map(localUploadFilename),
+      localUploadFilename(fallbackImageUrl),
+      localUploadFilename(videoUrl),
+    ].filter(Boolean))]
     const post = await db.$transaction(async (tx) => {
       const media = filenames.length
         ? await tx.mediaAsset.findMany({

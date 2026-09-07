@@ -4,10 +4,10 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { AlertTriangle, Camera, Fish, Globe, MapPin, Shield, Sparkles, Trash2, Video } from "lucide-react"
+import { AlertTriangle, Camera, Fish, Globe, MapPin, Shield, Sparkles, Trash2, Video, X } from "lucide-react"
 import { AvatarCropper } from "@/components/AvatarCropper"
 
-export function OnboardingModal({ isOpen, user, onComplete }) {
+export function OnboardingModal({ isOpen, user, onComplete, onClose }) {
   const avatarInputRef = useRef(null)
   const [displayName, setDisplayName] = useState(user?.displayName || user?.username || "")
   const [bio, setBio] = useState(user?.bio || "")
@@ -32,6 +32,14 @@ export function OnboardingModal({ isOpen, user, onComplete }) {
   }, [avatarPreview])
 
   if (!isOpen) return null
+
+  const closeModal = () => {
+    if (submitting) return
+    setPendingAvatarFile(null)
+    setConfirmRemoveAvatarOpen(false)
+    if (avatarInputRef.current) avatarInputRef.current.value = ""
+    onClose?.()
+  }
 
   const confirmRemoveAvatar = () => {
     setAvatarFile(null)
@@ -92,19 +100,38 @@ export function OnboardingModal({ isOpen, user, onComplete }) {
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-md overflow-y-auto">
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-3 backdrop-blur-md sm:p-4"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="profile-setup-title"
+        onClick={closeModal}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") closeModal()
+        }}
+      >
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 16 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 16 }}
-          className="bg-card w-full max-w-xl rounded-3xl border border-border/80 shadow-2xl p-6 sm:p-8 my-8"
+          className="custom-scrollbar relative max-h-[calc(100dvh-1.5rem)] w-full max-w-xl overflow-y-auto rounded-3xl border border-border/80 bg-card p-5 shadow-2xl sm:max-h-[calc(100dvh-2rem)] sm:p-8"
+          onClick={(event) => event.stopPropagation()}
         >
-          <div className="flex items-center gap-3 mb-4">
+          <button
+            type="button"
+            aria-label="Dong chinh sua ho so"
+            onClick={closeModal}
+            disabled={submitting}
+            className="kinetic absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50 sm:right-5 sm:top-5"
+          >
+            <X className="h-4 w-4" />
+          </button>
+          <div className="mb-4 flex items-start gap-3 pr-11">
             <div className="h-12 w-12 rounded-2xl bg-primary flex items-center justify-center shadow-lg shadow-primary/25">
               <Sparkles className="h-6 w-6 text-primary-foreground" />
             </div>
             <div>
-              <h2 className="text-xl font-bold tracking-tight">Thiết lập Trang cá nhân </h2>
+              <h2 id="profile-setup-title" className="text-xl font-bold tracking-tight">Thiết lập Trang cá nhân </h2>
               <p className="text-xs text-muted-foreground">
                 Hoàn tất thông tin để kích hoạt chứng nhận bảo vệ quyền tác giả
               </p>
@@ -257,7 +284,16 @@ export function OnboardingModal({ isOpen, user, onComplete }) {
               </div>
             </div>
 
-            <div className="pt-4 flex justify-end gap-2.5">
+            <div className="flex flex-col-reverse gap-2.5 pt-4 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={submitting}
+                onClick={closeModal}
+                className="h-11 w-full rounded-xl font-semibold sm:w-auto"
+              >
+                Hủy
+              </Button>
               <Button
                 type="submit"
                 disabled={submitting}

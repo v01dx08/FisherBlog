@@ -2,7 +2,7 @@
 
 import { BookmarkSimple, Fish, Hash, MagnifyingGlass, X } from "@phosphor-icons/react"
 import Link from "next/link"
-import { useRef, useState } from "react"
+import { useState } from "react"
 import { CreatePostBox, PostCard } from "@/components/FeedComponents"
 import { Header } from "@/components/Header"
 import { LeftSidebar } from "@/components/LeftSidebar"
@@ -10,12 +10,12 @@ import { OnboardingModal } from "@/components/OnboardingModal"
 import { RightSidebar } from "@/components/RightSidebar"
 
 export function FeedPageClient({ initialPosts, initialCursor, initialUser, tag, query, saved }) {
-  const composerRef = useRef(null)
   const [posts, setPosts] = useState(initialPosts)
   const [currentUser, setCurrentUser] = useState(initialUser)
   const [nextCursor, setNextCursor] = useState(initialCursor)
   const [loadingMore, setLoadingMore] = useState(false)
   const [loadError, setLoadError] = useState("")
+  const [composeOpen, setComposeOpen] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState(Boolean(
     initialUser && initialUser.role === "INFLUENCER" && !initialUser.isProfileCompleted
   ))
@@ -52,10 +52,10 @@ export function FeedPageClient({ initialPosts, initialCursor, initialUser, tag, 
 
   return (
     <main id="main-content" className="h-[100dvh] w-full overflow-hidden bg-background">
-      <Header onNewPostClick={() => composerRef.current?.scrollTo({ top: 0, behavior: "smooth" })} />
+      <Header onNewPostClick={() => setComposeOpen(true)} />
       <div className="mx-auto grid h-full w-full max-w-[1480px] grid-cols-1 gap-5 overflow-hidden px-3 pb-[76px] pt-[76px] sm:px-5 md:pb-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,680px)_300px] xl:grid-cols-[280px_minmax(0,680px)_320px] xl:gap-6">
         <div className="hidden xl:block"><LeftSidebar /></div>
-        <section ref={composerRef} className="custom-scrollbar min-h-0 min-w-0 overflow-y-auto pb-8 lg:col-start-2">
+        <section className="custom-scrollbar min-h-0 min-w-0 overflow-y-auto pb-8 lg:col-start-2">
           <div className="mb-4 flex items-center justify-between px-1">
             <div>
               <h1 className="text-xl font-bold tracking-[-0.025em] sm:text-2xl">{filter ? filter.text : "Bảng tin cộng đồng"}</h1>
@@ -63,7 +63,12 @@ export function FeedPageClient({ initialPosts, initialCursor, initialUser, tag, 
             </div>
             {filter && <Link href="/" aria-label="Xóa bộ lọc" className="kinetic flex h-9 w-9 items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-primary/15 hover:text-primary"><X size={16} weight="bold" /></Link>}
           </div>
-          {!saved && <CreatePostBox currentUser={currentUser} onPostCreated={(post) => setPosts((items) => [post, ...items])} />}
+          {!saved && (
+            <CreatePostBox
+              currentUser={currentUser}
+              onRequestCompose={() => setComposeOpen(true)}
+            />
+          )}
           {posts.length === 0 ? (
             <div className="social-card flex min-h-72 flex-col items-center justify-center p-10 text-center">
               <span className="flex h-14 w-14 items-center justify-center rounded-full bg-primary/12 text-primary"><Fish size={28} weight="duotone" /></span>
@@ -97,7 +102,43 @@ export function FeedPageClient({ initialPosts, initialCursor, initialUser, tag, 
         </section>
         <div className="hidden lg:block lg:col-start-3"><RightSidebar /></div>
       </div>
-      {currentUser && <OnboardingModal isOpen={showOnboarding} user={currentUser} onComplete={(user) => { setCurrentUser(user); setShowOnboarding(false) }} />}
+      {currentUser && (
+        <OnboardingModal
+          isOpen={showOnboarding}
+          user={currentUser}
+          onComplete={(user) => { setCurrentUser(user); setShowOnboarding(false) }}
+          onClose={() => setShowOnboarding(false)}
+        />
+      )}
+      {composeOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-3 backdrop-blur-md sm:p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Viết bài"
+          onClick={() => setComposeOpen(false)}
+          onKeyDown={(event) => { if (event.key === "Escape") setComposeOpen(false) }}
+        >
+          <div className="custom-scrollbar max-h-[calc(100dvh-1.5rem)] w-full max-w-2xl overflow-y-auto" onClick={(event) => event.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between px-1 text-foreground">
+              <h2 className="text-base font-bold">Viết bài</h2>
+              <button type="button" onClick={() => setComposeOpen(false)} className="kinetic flex h-9 w-9 items-center justify-center rounded-full bg-card text-muted-foreground shadow-sm ring-1 ring-border/70 hover:text-foreground" aria-label="Đóng viết bài">
+                <X size={17} weight="bold" />
+              </button>
+            </div>
+            <CreatePostBox
+              currentUser={currentUser}
+              startExpanded
+              hideTrigger
+              onCancel={() => setComposeOpen(false)}
+              onPostCreated={(post) => {
+                setPosts((items) => [post, ...items])
+                setComposeOpen(false)
+              }}
+            />
+          </div>
+        </div>
+      )}
     </main>
   )
 }

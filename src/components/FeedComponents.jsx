@@ -62,11 +62,33 @@ async function uploadFile(file) {
   return data.url
 }
 
-export function CreatePostBox({ onPostCreated, currentUser }) {
+function previewGridClass(count) {
+  if (count <= 1) return "grid-cols-1 aspect-[4/3] sm:aspect-[16/10]"
+  if (count === 2) return "grid-cols-2 aspect-[16/10]"
+  if (count === 3) return "grid-cols-2 grid-rows-2 aspect-[4/3] sm:aspect-[16/10]"
+  if (count === 4) return "grid-cols-2 grid-rows-2 aspect-[4/3]"
+  return "grid-cols-6 grid-rows-[minmax(0,1.2fr)_minmax(0,1fr)] aspect-[5/4] sm:aspect-[4/3]"
+}
+
+function previewTileClass(count, index) {
+  if (count === 3 && index === 0) return "col-span-2"
+  if (count >= 5 && index < 2) return "col-span-3"
+  if (count >= 5) return "col-span-2"
+  return ""
+}
+
+export function CreatePostBox({
+  onPostCreated,
+  currentUser,
+  startExpanded = false,
+  hideTrigger = false,
+  onRequestCompose,
+  onCancel,
+}) {
   const fileRef = React.useRef(null)
-  const [expanded, setExpanded] = React.useState(false)
+  const [expanded, setExpanded] = React.useState(startExpanded)
   const [content, setContent] = React.useState("")
-  const [file, setFile] = React.useState(null)
+  const [files, setFiles] = React.useState([])
   const [species, setSpecies] = React.useState("")
   const [weightKg, setWeightKg] = React.useState("")
   const [spotName, setSpotName] = React.useState("")
@@ -74,12 +96,15 @@ export function CreatePostBox({ onPostCreated, currentUser }) {
   const [submitting, setSubmitting] = React.useState(false)
   const [errorMessage, setErrorMessage] = React.useState("")
 
-  const preview = React.useMemo(() => (file ? URL.createObjectURL(file) : ""), [file])
-  React.useEffect(() => () => { if (preview) URL.revokeObjectURL(preview) }, [preview])
+  const previews = React.useMemo(
+    () => files.map((item) => ({ file: item, url: URL.createObjectURL(item) })),
+    [files]
+  )
+  React.useEffect(() => () => { previews.forEach((item) => URL.revokeObjectURL(item.url)) }, [previews])
 
   const reset = () => {
     setContent("")
-    setFile(null)
+    setFiles([])
     setSpecies("")
     setWeightKg("")
     setSpotName("")
@@ -87,6 +112,11 @@ export function CreatePostBox({ onPostCreated, currentUser }) {
     setExpanded(false)
     setErrorMessage("")
     if (fileRef.current) fileRef.current.value = ""
+  }
+
+  const cancel = () => {
+    reset()
+    onCancel?.()
   }
 
   const submit = async (event) => {
@@ -103,15 +133,23 @@ export function CreatePostBox({ onPostCreated, currentUser }) {
     setSubmitting(true)
     setErrorMessage("")
     try {
-      const uploadedUrl = file ? await uploadFile(file) : null
-      const isVideo = file?.type.startsWith("video/")
+      const uploadedItems = files.length
+        ? await Promise.all(files.map(async (item) => ({
+            file: item,
+            url: new URL(await uploadFile(item), window.location.origin).toString(),
+          })))
+        : []
+      const videoItem = uploadedItems.find((item) => item.file.type.startsWith("video/"))
+      const imageUrls = uploadedItems
+        .filter((item) => item.file.type.startsWith("image/"))
+        .map((item) => item.url)
       const response = await fetch("/api/posts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           content,
-          imageUrl: uploadedUrl && !isVideo ? new URL(uploadedUrl, window.location.origin).toString() : null,
-          videoUrl: uploadedUrl && isVideo ? new URL(uploadedUrl, window.location.origin).toString() : null,
+          imageUrls,
+          videoUrl: videoItem?.url || null,
           species,
           weightKg,
           spotName,
@@ -129,11 +167,27 @@ export function CreatePostBox({ onPostCreated, currentUser }) {
     }
   }
 
+  const selectFiles = (selectedFiles) => {
+    const selected = Array.from(selectedFiles || [])
+    if (selected.length === 0) return
+    const hasVideo = selected.some((item) => item.type.startsWith("video/"))
+    const hasImage = selected.some((item) => item.type.startsWith("image/"))
+    if (hasVideo && (hasImage || selected.length > 1)) {
+      setErrorMessage("Chỉ chọn một video, hoặc chọn nhiều ảnh trong cùng một bài.")
+      if (fileRef.current) fileRef.current.value = ""
+      return
+    }
+    const nextFiles = hasVideo ? selected.slice(0, 1) : selected.slice(0, 10)
+    setFiles(nextFiles)
+    setErrorMessage(selected.length > nextFiles.length ? "Tối đa 10 ảnh cho mỗi bài viết." : "")
+  }
+
   const initials = (currentUser?.displayName || currentUser?.username || "NK").slice(0, 2).toUpperCase()
 
   return (
     <div className="social-card mb-4 overflow-hidden" id="composer">
       <form onSubmit={submit} className="p-4 sm:p-5">
+        {!hideTrigger && (
         <div className="flex gap-3">
           <Avatar className="h-11 w-11 ring-1 ring-primary/20">
             {currentUser?.avatarUrl && <AvatarImage src={currentUser.avatarUrl} alt={currentUser.displayName || currentUser.username} className="object-cover" />}
@@ -141,12 +195,13 @@ export function CreatePostBox({ onPostCreated, currentUser }) {
           </Avatar>
           <button
             type="button"
-            onClick={() => setExpanded(true)}
+            onClick={() => onRequestCompose ? onRequestCompose() : setExpanded(true)}
             className="kinetic min-h-11 flex-1 rounded-full bg-muted/75 px-4 text-left text-sm text-muted-foreground ring-1 ring-transparent hover:bg-muted hover:ring-border"
           >
             {currentUser ? "Ghi lại mẻ câu, kỹ thuật và khoảnh khắc hôm nay..." : "Đăng nhập để lưu dấu thời gian cho nội dung gốc..."}
           </button>
         </div>
+        )}
 
         <AnimatePresence initial={false}>
           {expanded && (
@@ -155,8 +210,57 @@ export function CreatePostBox({ onPostCreated, currentUser }) {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 18 }}
               transition={{ duration: 0.4, ease: [0.32, 0.72, 0, 1] }}
-              className="mt-4 space-y-4 border-t border-border/65 pt-4"
+              className={hideTrigger ? "space-y-4" : "mt-4 space-y-4 border-t border-border/65 pt-4"}
             >
+              <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-3">
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"
+                  multiple
+                  className="hidden"
+                  onChange={(event) => selectFiles(event.target.files)}
+                />
+                <button type="button" onClick={() => fileRef.current?.click()} className="kinetic flex min-w-0 items-center gap-2 rounded-xl bg-muted/55 px-4 py-3 text-left text-xs font-semibold text-muted-foreground ring-1 ring-border/60 hover:bg-muted hover:text-foreground">
+                  {files[0]?.type.startsWith("video/") ? <VideoCamera size={17} weight="light" className="shrink-0" /> : <ImageSquare size={17} weight="light" className="shrink-0" />}
+                  <span className="min-w-0 truncate">
+                    {files.length > 1 ? `${files.length} ảnh đã chọn` : files[0]?.name || "Tải ảnh hoặc video"}
+                  </span>
+                </button>
+                <select value={visibility} onChange={(event) => setVisibility(event.target.value)} className="min-w-0 rounded-xl bg-muted/55 px-4 py-3 text-xs font-semibold outline-none ring-1 ring-border/60">
+                  <option value="PUBLIC">Công khai</option>
+                  <option value="UNLISTED">Chỉ người có link</option>
+                  <option value="PRIVATE">Riêng tư</option>
+                </select>
+              </div>
+
+              {previews.length > 0 && (
+                <div className={`grid min-w-0 max-w-full gap-0.5 overflow-hidden rounded-xl bg-muted/40 ${previewGridClass(previews.length)}`}>
+                  {previews.slice(0, 5).map((preview, index) => (
+                    <div key={preview.url} className={`relative min-h-0 min-w-0 overflow-hidden bg-foreground ${previewTileClass(previews.length, index)}`}>
+                      {preview.file.type.startsWith("video/") ? (
+                        <video src={preview.url} controls className="h-full w-full object-contain" />
+                      ) : (
+                        <img src={preview.url} alt="Xem trước ảnh tải lên" className="h-full w-full object-cover" />
+                      )}
+                      {previews.length > 5 && index === 4 && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/65 text-3xl font-bold text-white">
+                          +{previews.length - 5}
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setFiles((items) => items.filter((_, itemIndex) => itemIndex !== index))}
+                        aria-label="Bỏ tệp"
+                        className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-black/65 text-white"
+                      >
+                        <X size={15} weight="light" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <textarea
                 autoFocus
                 value={content}
@@ -166,31 +270,18 @@ export function CreatePostBox({ onPostCreated, currentUser }) {
                 className="min-h-32 w-full resize-none rounded-xl bg-muted/55 p-4 text-sm leading-relaxed outline-none ring-1 ring-border/65 focus:ring-primary/50"
               />
 
-              {preview && (
-                <div className="relative overflow-hidden rounded-xl bg-foreground ring-1 ring-border/70">
-                  {file?.type.startsWith("video/") ? (
-                    <video src={preview} controls className="max-h-80 w-full object-contain" />
-                  ) : (
-                    <img src={preview} alt="Xem trước ảnh tải lên" className="max-h-80 w-full object-cover" />
-                  )}
-                  <button type="button" onClick={() => setFile(null)} aria-label="Bỏ tệp" className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-black/65 text-white">
-                    <X size={16} weight="light" />
-                  </button>
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <label className="rounded-xl bg-muted/55 px-4 py-3 ring-1 ring-border/60">
-                  <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Loài cá</span>
-                  <input value={species} onChange={(event) => setSpecies(event.target.value)} maxLength={80} placeholder="Cá chẽm" className="w-full bg-transparent text-sm outline-none" />
+              <div className="grid min-w-0 grid-cols-3 gap-3">
+                <label className="min-w-0 rounded-xl bg-muted/55 px-3 py-3 ring-1 ring-border/60 sm:px-4">
+                  <span className="mb-1 block truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground sm:tracking-[0.16em]">Loài cá</span>
+                  <input value={species} onChange={(event) => setSpecies(event.target.value)} maxLength={80} placeholder="Cá chẽm" className="w-full min-w-0 bg-transparent text-sm outline-none" />
                 </label>
-                <label className="rounded-xl bg-muted/55 px-4 py-3 ring-1 ring-border/60">
-                  <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Cân nặng</span>
-                  <input type="number" min="0.01" max="1000" step="0.01" value={weightKg} onChange={(event) => setWeightKg(event.target.value)} placeholder="3.2 kg" className="w-full bg-transparent text-sm outline-none" />
+                <label className="min-w-0 rounded-xl bg-muted/55 px-3 py-3 ring-1 ring-border/60 sm:px-4">
+                  <span className="mb-1 block truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground sm:tracking-[0.16em]">Cân nặng</span>
+                  <input type="number" min="0.01" max="1000" step="0.01" value={weightKg} onChange={(event) => setWeightKg(event.target.value)} placeholder="3.2 kg" className="w-full min-w-0 bg-transparent text-sm outline-none" />
                 </label>
-                <label className="rounded-xl bg-muted/55 px-4 py-3 ring-1 ring-border/60">
-                  <span className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Điểm câu</span>
-                  <input value={spotName} onChange={(event) => setSpotName(event.target.value)} maxLength={120} placeholder="Hồ Trị An" className="w-full bg-transparent text-sm outline-none" />
+                <label className="min-w-0 rounded-xl bg-muted/55 px-3 py-3 ring-1 ring-border/60 sm:px-4">
+                  <span className="mb-1 block truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground sm:tracking-[0.16em]">Điểm câu</span>
+                  <input value={spotName} onChange={(event) => setSpotName(event.target.value)} maxLength={120} placeholder="Hồ Trị An" className="w-full min-w-0 bg-transparent text-sm outline-none" />
                 </label>
               </div>
 
@@ -201,32 +292,14 @@ export function CreatePostBox({ onPostCreated, currentUser }) {
                 </div>
               )}
 
-              <div className="flex flex-col gap-3 border-t border-border/60 pt-4 sm:flex-row sm:items-center">
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"
-                  className="hidden"
-                  onChange={(event) => setFile(event.target.files?.[0] || null)}
-                />
-                <button type="button" onClick={() => fileRef.current?.click()} className="kinetic flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-muted-foreground hover:bg-muted hover:text-foreground">
-                  {file?.type.startsWith("video/") ? <VideoCamera size={17} weight="light" /> : <ImageSquare size={17} weight="light" />}
-                  {file ? file.name : "Tải ảnh hoặc video"}
+              <div className="flex justify-end gap-2 border-t border-border/60 pt-4">
+                <button type="button" onClick={cancel} disabled={submitting} className="kinetic rounded-lg px-4 py-2.5 text-xs font-semibold hover:bg-muted">Hủy</button>
+                <button type="submit" disabled={submitting || !content.trim()} className="kinetic group flex items-center gap-2 rounded-lg bg-primary py-1 pl-4 pr-1 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-40 active:scale-[0.98]">
+                  {submitting ? "Đang xuất bản..." : "Xuất bản"}
+                  <span className="kinetic flex h-8 w-8 items-center justify-center rounded-full bg-white/14 group-hover:-translate-y-0.5 group-hover:translate-x-0.5">
+                    <UploadSimple size={15} weight="light" />
+                  </span>
                 </button>
-                <select value={visibility} onChange={(event) => setVisibility(event.target.value)} className="rounded-lg bg-muted px-3 py-2 text-xs font-semibold outline-none ring-1 ring-border/60">
-                  <option value="PUBLIC">Công khai</option>
-                  <option value="UNLISTED">Chỉ người có link</option>
-                  <option value="PRIVATE">Riêng tư</option>
-                </select>
-                <div className="ml-auto flex gap-2">
-                  <button type="button" onClick={reset} disabled={submitting} className="kinetic rounded-lg px-4 py-2.5 text-xs font-semibold hover:bg-muted">Hủy</button>
-                  <button type="submit" disabled={submitting || !content.trim()} className="kinetic group flex items-center gap-2 rounded-lg bg-primary py-1 pl-4 pr-1 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-40 active:scale-[0.98]">
-                    {submitting ? "Đang xuất bản..." : "Xuất bản"}
-                    <span className="kinetic flex h-8 w-8 items-center justify-center rounded-full bg-white/14 group-hover:-translate-y-0.5 group-hover:translate-x-0.5">
-                      <UploadSimple size={15} weight="light" />
-                    </span>
-                  </button>
-                </div>
               </div>
             </motion.div>
           )}
