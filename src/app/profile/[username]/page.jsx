@@ -15,12 +15,10 @@ import {
   Video,
   Globe,
   Share2,
-  Edit3,
   FileText,
   MessageSquare,
 } from "lucide-react"
 import { motion } from "framer-motion"
-import { OnboardingModal } from "@/components/OnboardingModal"
 import { ChatCircle, UserPlus } from "@phosphor-icons/react"
 
 export default function ProfilePage({ params }) {
@@ -30,7 +28,6 @@ export default function ProfilePage({ params }) {
   const [profile, setProfile] = useState(null)
   const [currentUser, setCurrentUser] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [editModalOpen, setEditModalOpen] = useState(false)
   const [error, setError] = useState("")
   const [messageOpen, setMessageOpen] = useState(false)
   const [messageText, setMessageText] = useState("")
@@ -52,6 +49,23 @@ export default function ProfilePage({ params }) {
       .finally(() => active && setLoading(false))
     return () => { active = false }
   }, [username])
+
+  useEffect(() => {
+    const onProfileUpdated = (event) => {
+      const updated = event.detail
+      if (!updated) return
+      setProfile((current) => {
+        if (!current || (updated.id !== current.id && updated.username !== current.username)) return current
+        return { ...current, ...updated }
+      })
+      setCurrentUser((current) => {
+        if (!current || (updated.id !== current.id && updated.username !== current.username)) return current
+        return { ...current, ...updated }
+      })
+    }
+    window.addEventListener("profile-updated", onProfileUpdated)
+    return () => window.removeEventListener("profile-updated", onProfileUpdated)
+  }, [])
 
   const isOwner =
     currentUser &&
@@ -94,10 +108,10 @@ export default function ProfilePage({ params }) {
     <main id="main-content" className="h-[100dvh] w-full overflow-hidden bg-background">
       <Header />
 
-      <div className="mx-auto grid h-full w-full max-w-[1580px] grid-cols-1 gap-5 overflow-hidden px-3 pb-[76px] pt-[76px] sm:px-5 md:pb-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,800px)_300px] xl:grid-cols-[280px_minmax(0,800px)_320px] xl:gap-6">
-        <div className="hidden xl:block"><LeftSidebar /></div>
+      <div className="grid h-full w-full grid-cols-1 gap-5 overflow-hidden px-3 pb-[76px] pt-[76px] sm:px-5 md:pb-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,800px)_minmax(320px,1fr)] xl:grid-cols-[280px_minmax(24px,1fr)_minmax(0,800px)_minmax(24px,1fr)_320px] xl:gap-6 min-[2100px]:mx-auto min-[2100px]:max-w-[1580px]">
+        <div className="hidden min-w-0 xl:col-start-1 xl:block"><LeftSidebar /></div>
 
-        <section className="custom-scrollbar min-h-0 min-w-0 overflow-y-auto pb-16 pt-4 lg:col-start-2">
+        <section className="custom-scrollbar min-h-0 min-w-0 overflow-y-auto pb-16 pt-4 lg:col-start-2 xl:col-start-3">
           {loading ? (
             <div className="space-y-6 pt-8">
               <div className="h-44 rounded-3xl bg-muted animate-pulse" />
@@ -116,7 +130,14 @@ export default function ProfilePage({ params }) {
               {/* Profile Card */}
               <div className="bg-card rounded-3xl border border-border/60 shadow-sm overflow-hidden">
                 {/* Cover Banner */}
-                <div className="h-40 bg-gradient-to-r from-sky-600 via-cyan-700 to-teal-800 relative overflow-hidden">
+                <div className="relative h-40 overflow-hidden bg-gradient-to-r from-sky-600 via-cyan-700 to-teal-800">
+                  {profile.coverUrl && (
+                    <img
+                      src={profile.coverUrl}
+                      alt={`Ảnh bìa của ${profile.displayName || profile.username}`}
+                      className="h-full w-full object-cover"
+                    />
+                  )}
                   <div className="absolute inset-0 bg-primary/10 backdrop-blur-[1px]" />
                   <div className="absolute right-6 bottom-4 hidden items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-white/40 sm:flex">
                     <ShieldCheck className="h-4 w-4" />
@@ -151,17 +172,7 @@ export default function ProfilePage({ params }) {
                       </div>
                     </div>
 
-                    {isOwner ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setEditModalOpen(true)}
-                        className="self-start rounded-full gap-2 text-xs font-semibold sm:self-end"
-                      >
-                        <Edit3 className="h-3.5 w-3.5" />
-                        Chỉnh sửa hồ sơ
-                      </Button>
-                    ) : currentUser ? (
+                    {!isOwner && currentUser ? (
                       <div className="flex gap-2 self-start sm:self-end">
                         <Button size="sm" variant="outline" onClick={() => setMessageOpen(true)} className="rounded-full gap-2 text-xs font-semibold">
                           <ChatCircle size={15} weight="light" /> Nhắn tin
@@ -340,20 +351,8 @@ export default function ProfilePage({ params }) {
           )}
         </section>
 
-        <div className="hidden lg:block lg:col-start-3"><RightSidebar /></div>
+        <div className="hidden min-w-0 justify-self-end lg:col-start-3 lg:block xl:col-start-5"><RightSidebar /></div>
       </div>
-
-      {profile && (
-        <OnboardingModal
-          isOpen={editModalOpen}
-          user={profile}
-          onClose={() => setEditModalOpen(false)}
-          onComplete={(updated) => {
-            setProfile((prev) => ({ ...prev, ...updated }))
-            setEditModalOpen(false)
-          }}
-        />
-      )}
 
       {messageOpen && profile && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="message-dialog-title" onKeyDown={(event) => { if (event.key === "Escape") setMessageOpen(false) }} onClick={() => setMessageOpen(false)}>

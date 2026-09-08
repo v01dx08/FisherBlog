@@ -5,7 +5,7 @@ import { requireUser } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { handleRouteError, json, RequestError } from "@/lib/http"
 import { assertSameOrigin } from "@/lib/security"
-import { ensureUploadDirectory, extensionForMime, matchesFileSignature, MAX_AVATAR_BYTES, MAX_UPLOAD_BYTES, UPLOAD_DIR } from "@/lib/storage"
+import { ensureUploadDirectory, extensionForMime, matchesFileSignature, MAX_AVATAR_BYTES, MAX_COVER_BYTES, MAX_UPLOAD_BYTES, UPLOAD_DIR } from "@/lib/storage"
 import { enforceRateLimit } from "@/lib/rate-limit"
 
 export const runtime = "nodejs"
@@ -25,9 +25,12 @@ export async function POST(request) {
     const file = form.get("file")
     const purpose = form.get("purpose")
     if (!(file instanceof File)) throw new RequestError("Thiếu tệp tải lên", 400)
-    if (purpose && purpose !== "avatar") throw new RequestError("Mục đích tải lên không hợp lệ", 400)
+    if (purpose && !["avatar", "cover"].includes(purpose)) throw new RequestError("Mục đích tải lên không hợp lệ", 400)
     if (purpose === "avatar" && (!file.type.startsWith("image/") || file.size > MAX_AVATAR_BYTES)) {
       throw new RequestError("Ảnh đại diện phải là JPG, PNG, WebP hoặc GIF và nhỏ hơn 5 MB", 415)
+    }
+    if (purpose === "cover" && (!file.type.startsWith("image/") || file.size > MAX_COVER_BYTES)) {
+      throw new RequestError("Ảnh bìa phải là JPG, PNG, WebP hoặc GIF và nhỏ hơn 8 MB", 415)
     }
     if (file.size < 1 || file.size > MAX_UPLOAD_BYTES) {
       throw new RequestError("Tệp cần nhỏ hơn 15 MB", 413)

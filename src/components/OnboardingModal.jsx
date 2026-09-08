@@ -9,6 +9,7 @@ import { AvatarCropper } from "@/components/AvatarCropper"
 
 export function OnboardingModal({ isOpen, user, onComplete, onClose }) {
   const avatarInputRef = useRef(null)
+  const coverInputRef = useRef(null)
   const [displayName, setDisplayName] = useState(user?.displayName || user?.username || "")
   const [bio, setBio] = useState(user?.bio || "")
   const [location, setLocation] = useState(user?.location || "")
@@ -17,8 +18,10 @@ export function OnboardingModal({ isOpen, user, onComplete, onClose }) {
   const [tiktokUrl, setTiktokUrl] = useState(user?.tiktokUrl || "")
   const [facebookUrl, setFacebookUrl] = useState(user?.facebookUrl || "")
   const [avatarFile, setAvatarFile] = useState(null)
+  const [coverFile, setCoverFile] = useState(null)
   const [pendingAvatarFile, setPendingAvatarFile] = useState(null)
   const [removeAvatar, setRemoveAvatar] = useState(false)
+  const [removeCover, setRemoveCover] = useState(false)
   const [confirmRemoveAvatarOpen, setConfirmRemoveAvatarOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState("")
@@ -27,9 +30,16 @@ export function OnboardingModal({ isOpen, user, onComplete, onClose }) {
     () => avatarFile ? URL.createObjectURL(avatarFile) : removeAvatar ? "" : user?.avatarUrl || "",
     [avatarFile, removeAvatar, user?.avatarUrl]
   )
+  const coverPreview = useMemo(
+    () => coverFile ? URL.createObjectURL(coverFile) : removeCover ? "" : user?.coverUrl || "",
+    [coverFile, removeCover, user?.coverUrl]
+  )
   useEffect(() => () => {
     if (avatarPreview.startsWith("blob:")) URL.revokeObjectURL(avatarPreview)
   }, [avatarPreview])
+  useEffect(() => () => {
+    if (coverPreview.startsWith("blob:")) URL.revokeObjectURL(coverPreview)
+  }, [coverPreview])
 
   if (!isOpen) return null
 
@@ -38,6 +48,7 @@ export function OnboardingModal({ isOpen, user, onComplete, onClose }) {
     setPendingAvatarFile(null)
     setConfirmRemoveAvatarOpen(false)
     if (avatarInputRef.current) avatarInputRef.current.value = ""
+    if (coverInputRef.current) coverInputRef.current.value = ""
     onClose?.()
   }
 
@@ -56,6 +67,7 @@ export function OnboardingModal({ isOpen, user, onComplete, onClose }) {
 
     try {
       let avatarUrl = removeAvatar ? null : user?.avatarUrl || null
+      let coverUrl = removeCover ? null : user?.coverUrl || null
       if (avatarFile) {
         const form = new FormData()
         form.set("file", avatarFile)
@@ -65,6 +77,15 @@ export function OnboardingModal({ isOpen, user, onComplete, onClose }) {
         if (!uploadResponse.ok) throw new Error(uploadData.error || "Không thể tải ảnh đại diện.")
         avatarUrl = new URL(uploadData.url, window.location.origin).toString()
       }
+      if (coverFile) {
+        const form = new FormData()
+        form.set("file", coverFile)
+        form.set("purpose", "cover")
+        const uploadResponse = await fetch("/api/uploads", { method: "POST", body: form })
+        const uploadData = await uploadResponse.json()
+        if (!uploadResponse.ok) throw new Error(uploadData.error || "Không thể tải ảnh bìa.")
+        coverUrl = new URL(uploadData.url, window.location.origin).toString()
+      }
 
       const res = await fetch(`/api/users/${user.username}`, {
         method: "PUT",
@@ -72,6 +93,7 @@ export function OnboardingModal({ isOpen, user, onComplete, onClose }) {
         body: JSON.stringify({
           displayName: displayName.trim(),
           avatarUrl,
+          coverUrl,
           bio: bio.trim(),
           location: location.trim(),
           fishingStyle: fishingStyle.trim(),
@@ -152,6 +174,46 @@ export function OnboardingModal({ isOpen, user, onComplete, onClose }) {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="rounded-2xl border border-border/60 bg-muted/35 p-4">
+              <div className="relative aspect-[3/1] min-h-32 overflow-hidden rounded-2xl bg-gradient-to-r from-sky-600 via-cyan-700 to-teal-800">
+                {coverPreview && <img src={coverPreview} alt="Xem trước ảnh bìa" className="h-full w-full object-cover" />}
+              </div>
+              <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-bold">Ảnh bìa hồ sơ</p>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">JPG, PNG, WebP hoặc GIF. Tối đa 8 MB.</p>
+                </div>
+                <input
+                  ref={coverInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0]
+                    if (!file) return
+                    if (!["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type) || file.size > 8 * 1024 * 1024) {
+                      setErrorMsg("Ảnh bìa phải là JPG, PNG, WebP hoặc GIF và nhỏ hơn 8 MB.")
+                      event.target.value = ""
+                      return
+                    }
+                    setErrorMsg("")
+                    setCoverFile(file)
+                    setRemoveCover(false)
+                  }}
+                />
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => coverInputRef.current?.click()} className="rounded-full gap-2">
+                    <Camera className="h-4 w-4" /> {coverPreview ? "Đổi ảnh bìa" : "Chọn ảnh bìa"}
+                  </Button>
+                  {coverPreview && (
+                    <Button type="button" variant="ghost" size="sm" onClick={() => { setCoverFile(null); setRemoveCover(true); if (coverInputRef.current) coverInputRef.current.value = "" }} className="rounded-full gap-2 text-destructive hover:text-destructive">
+                      <Trash2 className="h-4 w-4" /> Xóa ảnh bìa
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+
             <div className="flex flex-col gap-4 rounded-2xl border border-border/60 bg-muted/35 p-4 sm:flex-row sm:items-center">
               <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary text-2xl font-bold text-primary-foreground ring-4 ring-background shadow-lg">
                 {avatarPreview ? <img src={avatarPreview} alt="Xem trước ảnh đại diện" className="h-full w-full object-cover" /> : (displayName || user?.username || "NK").slice(0, 2).toUpperCase()}

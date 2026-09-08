@@ -53,9 +53,9 @@ export function FeedPageClient({ initialPosts, initialCursor, initialUser, tag, 
   return (
     <main id="main-content" className="h-[100dvh] w-full overflow-hidden bg-background">
       <Header onNewPostClick={() => setComposeOpen(true)} />
-      <div className="mx-auto grid h-full w-full max-w-[1480px] grid-cols-1 gap-5 overflow-hidden px-3 pb-[76px] pt-[76px] sm:px-5 md:pb-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,680px)_300px] xl:grid-cols-[280px_minmax(0,680px)_320px] xl:gap-6">
-        <div className="hidden xl:block"><LeftSidebar /></div>
-        <section className="custom-scrollbar min-h-0 min-w-0 overflow-y-auto pb-8 lg:col-start-2">
+      <div className="grid h-full w-full grid-cols-1 gap-5 overflow-hidden px-3 pb-[76px] pt-[76px] sm:px-5 md:pb-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,680px)_minmax(320px,1fr)] xl:grid-cols-[280px_minmax(24px,1fr)_minmax(0,680px)_minmax(24px,1fr)_320px] xl:gap-6 min-[2100px]:mx-auto min-[2100px]:max-w-[1480px]">
+        <div className="hidden min-w-0 xl:col-start-1 xl:block"><LeftSidebar /></div>
+        <section className="custom-scrollbar min-h-0 min-w-0 overflow-y-auto pb-8 lg:col-start-2 xl:col-start-3">
           <div className="mb-4 flex items-center justify-between px-1">
             <div>
               <h1 className="text-xl font-bold tracking-[-0.025em] sm:text-2xl">{filter ? filter.text : "Bảng tin cộng đồng"}</h1>
@@ -100,7 +100,7 @@ export function FeedPageClient({ initialPosts, initialCursor, initialUser, tag, 
           {loadError && <p role="alert" className="mb-4 rounded-xl bg-destructive/10 px-4 py-3 text-center text-xs text-destructive">{loadError}</p>}
           {nextCursor && <button type="button" disabled={loadingMore} onClick={loadMore} className="kinetic mx-auto flex rounded-lg bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 active:scale-[0.98] disabled:opacity-50">{loadingMore ? "Đang tải..." : "Xem thêm nhật ký"}</button>}
         </section>
-        <div className="hidden lg:block lg:col-start-3"><RightSidebar /></div>
+        <div className="hidden min-w-0 justify-self-end lg:col-start-3 lg:block xl:col-start-5"><RightSidebar /></div>
       </div>
       {currentUser && (
         <OnboardingModal

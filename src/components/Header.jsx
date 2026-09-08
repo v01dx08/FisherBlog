@@ -13,6 +13,7 @@ import {
   SignIn,
   SignOut,
   UserCircle,
+  Waves,
 } from "@phosphor-icons/react"
 import Link from "next/link"
 import Image from "next/image"
@@ -22,13 +23,13 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { NotificationsDropdown } from "@/components/NotificationsDropdown"
 import { SearchSuggestions } from "@/components/SearchSuggestions"
 import { SettingsModal } from "@/components/SettingsModal"
-import { ThemeToggle } from "@/components/ThemeToggle"
 
 const navigation = [
   { label: "Bảng tin", href: "/", icon: House, match: "home" },
   { label: "Khám phá", href: "/explore", icon: Compass, match: "explore" },
   { label: "Đã lưu", href: "/?saved=true", icon: BookmarkSimple, match: "saved" },
   { label: "Tin nhắn", href: "/messages", icon: ChatCircle, match: "messages" },
+  { label: "Điều kiện mặt nước", href: "/water-conditions", icon: Waves, match: "water" },
 ]
 
 export function Header({ onNewPostClick }) {
@@ -84,6 +85,7 @@ export function Header({ onNewPostClick }) {
   const isActive = (item) => {
     if (item.match === "explore") return pathname === "/explore"
     if (item.match === "messages") return pathname === "/messages"
+    if (item.match === "water") return pathname === "/water-conditions"
     if (item.match === "saved") return false
     return pathname === "/"
   }
@@ -93,13 +95,13 @@ export function Header({ onNewPostClick }) {
   return (
     <>
       <header className="app-header fixed inset-x-0 top-0 z-40 h-16">
-        <div className="mx-auto grid h-full max-w-[1480px] grid-cols-[1fr_auto] items-center gap-3 px-3 sm:px-5 md:grid-cols-[minmax(260px,1fr)_auto_minmax(260px,1fr)]">
+        <div className="grid h-full w-full grid-cols-[1fr_auto] items-center gap-3 px-3 sm:px-5 md:grid-cols-[minmax(260px,1fr)_auto_minmax(260px,1fr)]">
           <div className="flex min-w-0 items-center gap-2.5">
             <Link href="/" aria-label="Nhật ký ngày đi câu" className="kinetic flex shrink-0 items-center gap-2 rounded-xl p-1 text-foreground hover:bg-muted">
               <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-white shadow-[0_8px_28px_rgba(34,139,230,0.24)] ring-1 ring-primary/15">
                 <Image src="/fishviet-logo-192.png" width={40} height={40} alt="" className="h-full w-full object-cover" />
               </span>
-              <span className="text-sm font-extrabold tracking-[-0.035em]">Nhật ký ngày đi câu</span>
+              <span className="text-sm font-extrabold tracking-[-0.035em]"></span>
             </Link>
 
             <div ref={searchRef} className="relative hidden w-full max-w-[290px] sm:block">
@@ -148,8 +150,6 @@ export function Header({ onNewPostClick }) {
             )}
 
             {currentUser && <NotificationsDropdown />}
-            <ThemeToggle />
-
             {currentUser ? (
               <div ref={profileRef} className="relative">
                 <button type="button" onClick={() => setProfileOpen((open) => !open)} aria-expanded={profileOpen} aria-label="Mở menu tài khoản" className="kinetic rounded-full p-0.5 hover:bg-muted">

@@ -15,19 +15,19 @@ export async function GET(request, { params }) {
 
   try {
     const avatarPath = `/api/uploads/${filename}`
-    const [asset, user, avatarOwner] = await Promise.all([
+    const [asset, user, profileImageOwner] = await Promise.all([
       db.mediaAsset.findUnique({
         where: { filename },
         include: { post: { select: { visibility: true } } },
       }),
       getCurrentUser(request),
       db.user.findFirst({
-        where: { status: "ACTIVE", avatarUrl: avatarPath },
+        where: { status: "ACTIVE", OR: [{ avatarUrl: avatarPath }, { coverUrl: avatarPath }] },
         select: { id: true },
       }),
     ])
     if (!asset) return error("Không tìm thấy tệp", 404)
-    const isPublic = asset.post?.visibility === "PUBLIC" || Boolean(avatarOwner)
+    const isPublic = asset.post?.visibility === "PUBLIC" || Boolean(profileImageOwner)
     const canRead = isPublic || user?.id === asset.ownerId || user?.role === "ADMIN"
     if (!canRead) return error("Không tìm thấy tệp", 404)
 

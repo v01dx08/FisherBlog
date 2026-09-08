@@ -17,6 +17,7 @@ export async function GET(request) {
         status: true,
         displayName: true,
         avatarUrl: true,
+        coverUrl: true,
         bio: true,
         location: true,
         fishingStyle: true,

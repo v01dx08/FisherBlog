@@ -1,9 +1,10 @@
 "use client"
 
 import { AnimatePresence, motion } from "framer-motion"
-import { Bell, Check, DownloadSimple, EyeSlash, Lock, Moon, Sun, X } from "@phosphor-icons/react"
-import { useEffect, useState } from "react"
+import { Bell, Check, DownloadSimple, EyeSlash, Lock, Moon, Sun, UserCircle, X } from "@phosphor-icons/react"
+import { useEffect, useRef, useState } from "react"
 import { useTheme } from "@/components/ThemeProvider"
+import { OnboardingModal } from "@/components/OnboardingModal"
 
 export function SettingsModal({ isOpen, onClose }) {
   const { theme, setTheme } = useTheme()
@@ -12,8 +13,15 @@ export function SettingsModal({ isOpen, onClose }) {
   const [currentPassword, setCurrentPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
+  const [currentUser, setCurrentUser] = useState(null)
+  const [profileEditorOpen, setProfileEditorOpen] = useState(false)
+  const profileEditorOpenRef = useRef(false)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState("")
+
+  useEffect(() => {
+    profileEditorOpenRef.current = profileEditorOpen
+  }, [profileEditorOpen])
 
   useEffect(() => {
     if (!isOpen) return
@@ -28,7 +36,15 @@ export function SettingsModal({ isOpen, onClose }) {
         }
       })
       .catch(() => setMessage("Không thể tải thiết lập."))
-    const onKeyDown = (event) => { if (event.key === "Escape") onClose() }
+    fetch("/api/auth/me")
+      .then((response) => response.json())
+      .then((data) => setCurrentUser(data.user || null))
+      .catch(() => {})
+    const onKeyDown = (event) => {
+      if (event.key !== "Escape") return
+      if (profileEditorOpenRef.current) setProfileEditorOpen(false)
+      else onClose()
+    }
     window.addEventListener("keydown", onKeyDown)
     return () => {
       document.body.style.overflow = previousOverflow
@@ -78,7 +94,8 @@ export function SettingsModal({ isOpen, onClose }) {
   }
 
   return (
-    <AnimatePresence>
+    <>
+      <AnimatePresence>
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="settings-title" onClick={onClose}>
         <motion.div
           initial={{ opacity: 0, y: 24, scale: 0.96 }}
@@ -98,6 +115,18 @@ export function SettingsModal({ isOpen, onClose }) {
             </div>
 
             <div className="mt-7 space-y-3">
+              {currentUser && (
+                <button type="button" onClick={() => setProfileEditorOpen(true)} className="kinetic flex w-full items-center justify-between gap-4 rounded-[1.5rem] bg-muted/55 p-4 text-left active:scale-[0.99]">
+                  <span className="flex min-w-0 items-center gap-3">
+                    <UserCircle size={19} weight="light" className="shrink-0 text-primary" />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold">Chỉnh sửa hồ sơ</span>
+                      <span className="mt-1 block text-xs leading-5 text-muted-foreground">Ảnh bìa, ảnh đại diện, tiểu sử và liên kết mạng xã hội.</span>
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-xs font-semibold text-primary">Mở</span>
+                </button>
+              )}
               <label className="flex items-start justify-between gap-4 rounded-[1.5rem] bg-muted/55 p-4">
                 <span className="flex gap-3"><EyeSlash size={19} weight="light" className="mt-0.5 shrink-0 text-primary" /><span><span className="block text-sm font-semibold">Ẩn địa điểm trên hồ sơ</span><span className="mt-1 block text-xs leading-5 text-muted-foreground">Chỉ bạn và quản trị viên thấy địa điểm.</span></span></span>
                 <input type="checkbox" checked={hideLocation} onChange={(event) => setHideLocation(event.target.checked)} className="mt-1 h-4 w-4 accent-primary" />
@@ -139,6 +168,18 @@ export function SettingsModal({ isOpen, onClose }) {
           </div>
         </motion.div>
       </div>
-    </AnimatePresence>
+      </AnimatePresence>
+      {currentUser && profileEditorOpen && (
+        <OnboardingModal
+          isOpen={profileEditorOpen}
+          user={currentUser}
+          onClose={() => setProfileEditorOpen(false)}
+          onComplete={(updated) => {
+            setCurrentUser((user) => ({ ...user, ...updated }))
+            setProfileEditorOpen(false)
+          }}
+        />
+      )}
+    </>
   )
 }
