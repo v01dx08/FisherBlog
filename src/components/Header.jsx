@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from "framer-motion"
 import {
   BookmarkSimple,
+  ChatCircle,
   Compass,
   Gear,
   House,
@@ -12,22 +13,23 @@ import {
   SignIn,
   SignOut,
   UserCircle,
+  Waves,
 } from "@phosphor-icons/react"
 import Link from "next/link"
 import Image from "next/image"
 import { usePathname, useRouter } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { MessagesDropdown } from "@/components/MessagesDropdown"
 import { NotificationsDropdown } from "@/components/NotificationsDropdown"
 import { SearchSuggestions } from "@/components/SearchSuggestions"
 import { SettingsModal } from "@/components/SettingsModal"
-import { ThemeToggle } from "@/components/ThemeToggle"
 
 const navigation = [
   { label: "Bảng tin", href: "/", icon: House, match: "home" },
   { label: "Khám phá", href: "/explore", icon: Compass, match: "explore" },
   { label: "Đã lưu", href: "/?saved=true", icon: BookmarkSimple, match: "saved" },
+  { label: "Tin nhắn", href: "/messages", icon: ChatCircle, match: "messages" },
+  { label: "Điều kiện mặt nước", href: "/water-conditions", icon: Waves, match: "water" },
 ]
 
 export function Header({ onNewPostClick }) {
@@ -82,6 +84,8 @@ export function Header({ onNewPostClick }) {
 
   const isActive = (item) => {
     if (item.match === "explore") return pathname === "/explore"
+    if (item.match === "messages") return pathname === "/messages"
+    if (item.match === "water") return pathname === "/water-conditions"
     if (item.match === "saved") return false
     return pathname === "/"
   }
@@ -91,13 +95,13 @@ export function Header({ onNewPostClick }) {
   return (
     <>
       <header className="app-header fixed inset-x-0 top-0 z-40 h-16">
-        <div className="mx-auto grid h-full max-w-[1480px] grid-cols-[1fr_auto] items-center gap-3 px-3 sm:px-5 md:grid-cols-[minmax(260px,1fr)_auto_minmax(260px,1fr)]">
+        <div className="grid h-full w-full grid-cols-[1fr_auto] items-center gap-3 px-3 sm:px-5 md:grid-cols-[minmax(260px,1fr)_auto_minmax(260px,1fr)]">
           <div className="flex min-w-0 items-center gap-2.5">
             <Link href="/" aria-label="Nhật ký ngày đi câu" className="kinetic flex shrink-0 items-center gap-2 rounded-xl p-1 text-foreground hover:bg-muted">
               <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-white shadow-[0_8px_28px_rgba(34,139,230,0.24)] ring-1 ring-primary/15">
                 <Image src="/fishviet-logo-192.png" width={40} height={40} alt="" className="h-full w-full object-cover" />
               </span>
-              <span className="text-sm font-extrabold tracking-[-0.035em]">Nhật ký ngày đi câu</span>
+              <span className="text-sm font-extrabold tracking-[-0.035em]"></span>
             </Link>
 
             <div ref={searchRef} className="relative hidden w-full max-w-[290px] sm:block">
@@ -145,10 +149,7 @@ export function Header({ onNewPostClick }) {
               </button>
             )}
 
-            {currentUser && <MessagesDropdown />}
             {currentUser && <NotificationsDropdown />}
-            <ThemeToggle />
-
             {currentUser ? (
               <div ref={profileRef} className="relative">
                 <button type="button" onClick={() => setProfileOpen((open) => !open)} aria-expanded={profileOpen} aria-label="Mở menu tài khoản" className="kinetic rounded-full p-0.5 hover:bg-muted">
@@ -198,7 +199,7 @@ export function Header({ onNewPostClick }) {
         </div>
       </header>
 
-      <nav className="app-header fixed inset-x-0 bottom-0 z-40 grid h-16 grid-cols-4 px-2 md:hidden" aria-label="Điều hướng di động">
+      <nav className="app-header fixed inset-x-0 bottom-0 z-40 grid h-16 grid-cols-5 px-2 md:hidden" aria-label="Điều hướng di động">
         {navigation.slice(0, 2).map((item) => {
           const active = isActive(item)
           return (
@@ -207,10 +208,26 @@ export function Header({ onNewPostClick }) {
             </Link>
           )
         })}
-        <button type="button" onClick={onNewPostClick} disabled={!onNewPostClick} className="flex flex-col items-center justify-center gap-1 text-[10px] font-semibold text-primary disabled:text-muted-foreground">
-          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground"><Plus size={18} weight="bold" /></span>
-          Viết bài
-        </button>
+        {onNewPostClick ? (
+          <button type="button" onClick={onNewPostClick} className="flex flex-col items-center justify-center gap-1 text-[10px] font-semibold text-primary">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground"><Plus size={18} weight="bold" /></span>
+            Viết bài
+          </button>
+        ) : (
+          <Link href="/" className="flex flex-col items-center justify-center gap-1 text-[10px] font-semibold text-primary">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground"><Plus size={18} weight="bold" /></span>
+            Viết bài
+          </Link>
+        )}
+        {currentUser ? (
+          <Link href="/messages" className={`flex flex-col items-center justify-center gap-1 text-[10px] font-semibold ${isActive(navigation[3]) ? "text-primary" : "text-muted-foreground"}`}>
+            <ChatCircle size={22} weight={isActive(navigation[3]) ? "fill" : "regular"} /> Tin nhắn
+          </Link>
+        ) : (
+          <Link href="/login" className="flex flex-col items-center justify-center gap-1 text-[10px] font-semibold text-muted-foreground">
+            <SignIn size={22} weight="regular" /> Tin nhắn
+          </Link>
+        )}
         <Link href="/?saved=true" className={`flex flex-col items-center justify-center gap-1 text-[10px] font-semibold ${isActive(navigation[2]) ? "text-primary" : "text-muted-foreground"}`}>
           <BookmarkSimple size={22} weight={isActive(navigation[2]) ? "fill" : "regular"} /> Đã lưu
         </Link>

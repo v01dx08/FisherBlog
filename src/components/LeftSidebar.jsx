@@ -11,6 +11,7 @@ import {
   ShieldCheck,
   TrendUp,
   UserCircle,
+  Waves,
 } from "@phosphor-icons/react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -48,6 +49,7 @@ export function LeftSidebar() {
     { name: "Khám phá", icon: Compass, href: "/explore", active: pathname === "/explore" },
     { name: "Nhật ký đã lưu", icon: BookmarkSimple, href: "/?saved=true", active: false },
     ...(currentUser?.role === "ADMIN" ? [{ name: "Quản trị", icon: ShieldCheck, href: "/admin", active: pathname === "/admin" }] : []),
+    { name: "Điều kiện mặt nước", icon: Waves, href: "/water-conditions", active: pathname === "/water-conditions" },
     { name: "Pháp lý & bản quyền", icon: Scales, href: "/legal", active: pathname === "/legal" },
   ]
 

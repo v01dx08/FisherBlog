@@ -19,12 +19,13 @@ export async function GET(request) {
     const start = new Date()
     start.setUTCDate(start.getUTCDate() - 7)
 
-    const [totalUsers, totalPosts, totalComments, totalLikes, posts, comments, likes, users] =
+    const [totalUsers, totalPosts, totalComments, totalLikes, openReports, posts, comments, likes, users] =
       await Promise.all([
         db.user.count({ where: { status: "ACTIVE" } }),
         db.post.count(),
         db.comment.count(),
         db.like.count(),
+        db.report.count({ where: { status: "OPEN" } }),
         db.post.findMany({ where: { createdAt: { gte: start } }, select: { createdAt: true } }),
         db.comment.findMany({ where: { createdAt: { gte: start } }, select: { createdAt: true } }),
         db.like.findMany({ where: { createdAt: { gte: start } }, select: { createdAt: true } }),
@@ -69,6 +70,7 @@ export async function GET(request) {
         totalPosts,
         totalComments,
         totalLikes,
+        openReports,
       },
       timeline: [...timelineMap.values()],
     })

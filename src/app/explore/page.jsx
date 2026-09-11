@@ -76,10 +76,10 @@ export default function ExplorePage() {
     <main id="main-content" className="h-[100dvh] w-full overflow-hidden bg-background">
       <Header />
 
-      <div className="mx-auto grid h-full w-full max-w-[1580px] grid-cols-1 gap-5 overflow-hidden px-3 pb-[76px] pt-[76px] sm:px-5 md:pb-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,960px)_300px] xl:grid-cols-[280px_minmax(0,960px)_320px] xl:gap-6">
-        <div className="hidden xl:block"><LeftSidebar /></div>
+      <div className="grid h-full w-full grid-cols-1 gap-5 overflow-hidden px-3 pb-[76px] pt-[76px] sm:px-5 md:pb-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,960px)_minmax(320px,1fr)] xl:grid-cols-[280px_minmax(24px,1fr)_minmax(0,960px)_minmax(24px,1fr)_320px] xl:gap-6 min-[2100px]:mx-auto min-[2100px]:max-w-[1580px]">
+        <div className="hidden min-w-0 xl:col-start-1 xl:block"><LeftSidebar /></div>
 
-        <section className="custom-scrollbar min-h-0 min-w-0 overflow-y-auto pb-20 pt-6 lg:col-start-2">
+        <section className="custom-scrollbar min-h-0 min-w-0 overflow-y-auto pb-20 pt-6 lg:col-start-2 xl:col-start-3">
           {/* Hero Banner */}
           <div className="bg-gradient-to-r from-sky-900 via-teal-900 to-emerald-950 rounded-3xl p-6 sm:p-8 mb-6 text-white relative overflow-hidden shadow-lg">
             <div className="relative z-10 max-w-xl">
@@ -206,7 +206,7 @@ export default function ExplorePage() {
           )}
         </section>
 
-        <div className="hidden lg:block lg:col-start-3"><RightSidebar /></div>
+        <div className="hidden min-w-0 justify-self-end lg:col-start-3 lg:block xl:col-start-5"><RightSidebar /></div>
       </div>
 
       {/* Media Detail Modal */}

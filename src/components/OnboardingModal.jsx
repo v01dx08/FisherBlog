@@ -4,11 +4,12 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { AlertTriangle, Camera, Fish, Globe, MapPin, Shield, Sparkles, Trash2, Video } from "lucide-react"
+import { AlertTriangle, Camera, Fish, Globe, MapPin, Shield, Sparkles, Trash2, Video, X } from "lucide-react"
 import { AvatarCropper } from "@/components/AvatarCropper"
 
-export function OnboardingModal({ isOpen, user, onComplete }) {
+export function OnboardingModal({ isOpen, user, onComplete, onClose }) {
   const avatarInputRef = useRef(null)
+  const coverInputRef = useRef(null)
   const [displayName, setDisplayName] = useState(user?.displayName || user?.username || "")
   const [bio, setBio] = useState(user?.bio || "")
   const [location, setLocation] = useState(user?.location || "")
@@ -17,8 +18,10 @@ export function OnboardingModal({ isOpen, user, onComplete }) {
   const [tiktokUrl, setTiktokUrl] = useState(user?.tiktokUrl || "")
   const [facebookUrl, setFacebookUrl] = useState(user?.facebookUrl || "")
   const [avatarFile, setAvatarFile] = useState(null)
+  const [coverFile, setCoverFile] = useState(null)
   const [pendingAvatarFile, setPendingAvatarFile] = useState(null)
   const [removeAvatar, setRemoveAvatar] = useState(false)
+  const [removeCover, setRemoveCover] = useState(false)
   const [confirmRemoveAvatarOpen, setConfirmRemoveAvatarOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [errorMsg, setErrorMsg] = useState("")
@@ -27,11 +30,27 @@ export function OnboardingModal({ isOpen, user, onComplete }) {
     () => avatarFile ? URL.createObjectURL(avatarFile) : removeAvatar ? "" : user?.avatarUrl || "",
     [avatarFile, removeAvatar, user?.avatarUrl]
   )
+  const coverPreview = useMemo(
+    () => coverFile ? URL.createObjectURL(coverFile) : removeCover ? "" : user?.coverUrl || "",
+    [coverFile, removeCover, user?.coverUrl]
+  )
   useEffect(() => () => {
     if (avatarPreview.startsWith("blob:")) URL.revokeObjectURL(avatarPreview)
   }, [avatarPreview])
+  useEffect(() => () => {
+    if (coverPreview.startsWith("blob:")) URL.revokeObjectURL(coverPreview)
+  }, [coverPreview])
 
   if (!isOpen) return null
+
+  const closeModal = () => {
+    if (submitting) return
+    setPendingAvatarFile(null)
+    setConfirmRemoveAvatarOpen(false)
+    if (avatarInputRef.current) avatarInputRef.current.value = ""
+    if (coverInputRef.current) coverInputRef.current.value = ""
+    onClose?.()
+  }
 
   const confirmRemoveAvatar = () => {
     setAvatarFile(null)
@@ -48,6 +67,7 @@ export function OnboardingModal({ isOpen, user, onComplete }) {
 
     try {
       let avatarUrl = removeAvatar ? null : user?.avatarUrl || null
+      let coverUrl = removeCover ? null : user?.coverUrl || null
       if (avatarFile) {
         const form = new FormData()
         form.set("file", avatarFile)
@@ -57,6 +77,15 @@ export function OnboardingModal({ isOpen, user, onComplete }) {
         if (!uploadResponse.ok) throw new Error(uploadData.error || "Không thể tải ảnh đại diện.")
         avatarUrl = new URL(uploadData.url, window.location.origin).toString()
       }
+      if (coverFile) {
+        const form = new FormData()
+        form.set("file", coverFile)
+        form.set("purpose", "cover")
+        const uploadResponse = await fetch("/api/uploads", { method: "POST", body: form })
+        const uploadData = await uploadResponse.json()
+        if (!uploadResponse.ok) throw new Error(uploadData.error || "Không thể tải ảnh bìa.")
+        coverUrl = new URL(uploadData.url, window.location.origin).toString()
+      }
 
       const res = await fetch(`/api/users/${user.username}`, {
         method: "PUT",
@@ -64,6 +93,7 @@ export function OnboardingModal({ isOpen, user, onComplete }) {
         body: JSON.stringify({
           displayName: displayName.trim(),
           avatarUrl,
+          coverUrl,
           bio: bio.trim(),
           location: location.trim(),
           fishingStyle: fishingStyle.trim(),
@@ -92,19 +122,38 @@ export function OnboardingModal({ isOpen, user, onComplete }) {
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-md overflow-y-auto">
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-3 backdrop-blur-md sm:p-4"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="profile-setup-title"
+        onClick={closeModal}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") closeModal()
+        }}
+      >
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 16 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 16 }}
-          className="bg-card w-full max-w-xl rounded-3xl border border-border/80 shadow-2xl p-6 sm:p-8 my-8"
+          className="custom-scrollbar relative max-h-[calc(100dvh-1.5rem)] w-full max-w-xl overflow-y-auto rounded-3xl border border-border/80 bg-card p-5 shadow-2xl sm:max-h-[calc(100dvh-2rem)] sm:p-8"
+          onClick={(event) => event.stopPropagation()}
         >
-          <div className="flex items-center gap-3 mb-4">
+          <button
+            type="button"
+            aria-label="Dong chinh sua ho so"
+            onClick={closeModal}
+            disabled={submitting}
+            className="kinetic absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50 sm:right-5 sm:top-5"
+          >
+            <X className="h-4 w-4" />
+          </button>
+          <div className="mb-4 flex items-start gap-3 pr-11">
             <div className="h-12 w-12 rounded-2xl bg-primary flex items-center justify-center shadow-lg shadow-primary/25">
               <Sparkles className="h-6 w-6 text-primary-foreground" />
             </div>
             <div>
-              <h2 className="text-xl font-bold tracking-tight">Thiết lập Trang cá nhân </h2>
+              <h2 id="profile-setup-title" className="text-xl font-bold tracking-tight">Thiết lập Trang cá nhân </h2>
               <p className="text-xs text-muted-foreground">
                 Hoàn tất thông tin để kích hoạt chứng nhận bảo vệ quyền tác giả
               </p>
@@ -125,6 +174,46 @@ export function OnboardingModal({ isOpen, user, onComplete }) {
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="rounded-2xl border border-border/60 bg-muted/35 p-4">
+              <div className="relative aspect-[3/1] min-h-32 overflow-hidden rounded-2xl bg-gradient-to-r from-sky-600 via-cyan-700 to-teal-800">
+                {coverPreview && <img src={coverPreview} alt="Xem trước ảnh bìa" className="h-full w-full object-cover" />}
+              </div>
+              <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-bold">Ảnh bìa hồ sơ</p>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">JPG, PNG, WebP hoặc GIF. Tối đa 8 MB.</p>
+                </div>
+                <input
+                  ref={coverInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0]
+                    if (!file) return
+                    if (!["image/jpeg", "image/png", "image/webp", "image/gif"].includes(file.type) || file.size > 8 * 1024 * 1024) {
+                      setErrorMsg("Ảnh bìa phải là JPG, PNG, WebP hoặc GIF và nhỏ hơn 8 MB.")
+                      event.target.value = ""
+                      return
+                    }
+                    setErrorMsg("")
+                    setCoverFile(file)
+                    setRemoveCover(false)
+                  }}
+                />
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => coverInputRef.current?.click()} className="rounded-full gap-2">
+                    <Camera className="h-4 w-4" /> {coverPreview ? "Đổi ảnh bìa" : "Chọn ảnh bìa"}
+                  </Button>
+                  {coverPreview && (
+                    <Button type="button" variant="ghost" size="sm" onClick={() => { setCoverFile(null); setRemoveCover(true); if (coverInputRef.current) coverInputRef.current.value = "" }} className="rounded-full gap-2 text-destructive hover:text-destructive">
+                      <Trash2 className="h-4 w-4" /> Xóa ảnh bìa
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+
             <div className="flex flex-col gap-4 rounded-2xl border border-border/60 bg-muted/35 p-4 sm:flex-row sm:items-center">
               <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary text-2xl font-bold text-primary-foreground ring-4 ring-background shadow-lg">
                 {avatarPreview ? <img src={avatarPreview} alt="Xem trước ảnh đại diện" className="h-full w-full object-cover" /> : (displayName || user?.username || "NK").slice(0, 2).toUpperCase()}
@@ -257,7 +346,16 @@ export function OnboardingModal({ isOpen, user, onComplete }) {
               </div>
             </div>
 
-            <div className="pt-4 flex justify-end gap-2.5">
+            <div className="flex flex-col-reverse gap-2.5 pt-4 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={submitting}
+                onClick={closeModal}
+                className="h-11 w-full rounded-xl font-semibold sm:w-auto"
+              >
+                Hủy
+              </Button>
               <Button
                 type="submit"
                 disabled={submitting}

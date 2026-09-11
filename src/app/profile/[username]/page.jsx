@@ -15,13 +15,21 @@ import {
   Video,
   Globe,
   Share2,
-  Edit3,
+  Flag,
   FileText,
   MessageSquare,
 } from "lucide-react"
 import { motion } from "framer-motion"
-import { OnboardingModal } from "@/components/OnboardingModal"
 import { ChatCircle, UserPlus } from "@phosphor-icons/react"
+
+const reportReasons = [
+  { value: "SPAM", label: "Spam hoặc quảng cáo" },
+  { value: "HARASSMENT", label: "Quấy rối hoặc công kích" },
+  { value: "MISINFORMATION", label: "Thông tin sai lệch" },
+  { value: "ILLEGAL_ACTIVITY", label: "Hoạt động không phù hợp" },
+  { value: "COPYRIGHT", label: "Vi phạm bản quyền" },
+  { value: "OTHER", label: "Lý do khác" },
+]
 
 export default function ProfilePage({ params }) {
   const resolvedParams = use(params)
@@ -30,11 +38,14 @@ export default function ProfilePage({ params }) {
   const [profile, setProfile] = useState(null)
   const [currentUser, setCurrentUser] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [editModalOpen, setEditModalOpen] = useState(false)
   const [error, setError] = useState("")
   const [messageOpen, setMessageOpen] = useState(false)
   const [messageText, setMessageText] = useState("")
   const [sendingMessage, setSendingMessage] = useState(false)
+  const [reportOpen, setReportOpen] = useState(false)
+  const [reportReason, setReportReason] = useState("SPAM")
+  const [reportDetails, setReportDetails] = useState("")
+  const [reporting, setReporting] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -52,6 +63,23 @@ export default function ProfilePage({ params }) {
       .finally(() => active && setLoading(false))
     return () => { active = false }
   }, [username])
+
+  useEffect(() => {
+    const onProfileUpdated = (event) => {
+      const updated = event.detail
+      if (!updated) return
+      setProfile((current) => {
+        if (!current || (updated.id !== current.id && updated.username !== current.username)) return current
+        return { ...current, ...updated }
+      })
+      setCurrentUser((current) => {
+        if (!current || (updated.id !== current.id && updated.username !== current.username)) return current
+        return { ...current, ...updated }
+      })
+    }
+    window.addEventListener("profile-updated", onProfileUpdated)
+    return () => window.removeEventListener("profile-updated", onProfileUpdated)
+  }, [])
 
   const isOwner =
     currentUser &&
@@ -90,14 +118,36 @@ export default function ProfilePage({ params }) {
     }
   }
 
+  const reportUser = async (event) => {
+    event.preventDefault()
+    if (!profile || reporting) return
+    setReporting(true)
+    const res = await fetch("/api/reports", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        targetType: "USER",
+        targetId: profile.id,
+        reason: reportReason,
+        details: reportDetails,
+      }),
+    })
+    setReporting(false)
+    if (res.ok) {
+      setReportOpen(false)
+      setReportReason("SPAM")
+      setReportDetails("")
+    }
+  }
+
   return (
     <main id="main-content" className="h-[100dvh] w-full overflow-hidden bg-background">
       <Header />
 
-      <div className="mx-auto grid h-full w-full max-w-[1580px] grid-cols-1 gap-5 overflow-hidden px-3 pb-[76px] pt-[76px] sm:px-5 md:pb-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,800px)_300px] xl:grid-cols-[280px_minmax(0,800px)_320px] xl:gap-6">
-        <div className="hidden xl:block"><LeftSidebar /></div>
+      <div className="grid h-full w-full grid-cols-1 gap-5 overflow-hidden px-3 pb-[76px] pt-[76px] sm:px-5 md:pb-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,800px)_minmax(320px,1fr)] xl:grid-cols-[280px_minmax(24px,1fr)_minmax(0,800px)_minmax(24px,1fr)_320px] xl:gap-6 min-[2100px]:mx-auto min-[2100px]:max-w-[1580px]">
+        <div className="hidden min-w-0 xl:col-start-1 xl:block"><LeftSidebar /></div>
 
-        <section className="custom-scrollbar min-h-0 min-w-0 overflow-y-auto pb-16 pt-4 lg:col-start-2">
+        <section className="custom-scrollbar min-h-0 min-w-0 overflow-y-auto pb-16 pt-4 lg:col-start-2 xl:col-start-3">
           {loading ? (
             <div className="space-y-6 pt-8">
               <div className="h-44 rounded-3xl bg-muted animate-pulse" />
@@ -116,31 +166,38 @@ export default function ProfilePage({ params }) {
               {/* Profile Card */}
               <div className="bg-card rounded-3xl border border-border/60 shadow-sm overflow-hidden">
                 {/* Cover Banner */}
-                <div className="h-40 bg-gradient-to-r from-sky-600 via-cyan-700 to-teal-800 relative overflow-hidden">
+                <div className="relative h-40 overflow-hidden bg-gradient-to-r from-sky-600 via-cyan-700 to-teal-800">
+                  {profile.coverUrl && (
+                    <img
+                      src={profile.coverUrl}
+                      alt={`Ảnh bìa của ${profile.displayName || profile.username}`}
+                      className="h-full w-full object-cover"
+                    />
+                  )}
                   <div className="absolute inset-0 bg-primary/10 backdrop-blur-[1px]" />
-                  <div className="absolute right-6 bottom-4 text-white/40 text-xs font-semibold uppercase tracking-wider flex items-center gap-1.5">
+                  <div className="absolute right-6 bottom-4 hidden items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-white/40 sm:flex">
                     <ShieldCheck className="h-4 w-4" />
                     Bản gốc được Nhật ký ngày đi câu ghi nhận
                   </div>
                 </div>
 
                 {/* Profile Header Info */}
-                <div className="px-6 pb-6 pt-0 relative">
-                  <div className="flex flex-col sm:flex-row sm:items-end justify-between -mt-14 mb-4 gap-4">
-                    <div className="flex items-end gap-4">
+                <div className="relative px-4 pb-6 pt-0 sm:px-6">
+                  <div className="-mt-14 mb-4 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+                    <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-end sm:gap-4">
                       <Avatar className="h-28 w-28 ring-4 ring-card shadow-xl">
                         {profile.avatarUrl && <AvatarImage src={profile.avatarUrl} alt={profile.displayName || profile.username} className="object-cover" />}
                         <AvatarFallback className="bg-primary text-primary-foreground font-bold text-3xl">
                           {initials}
                         </AvatarFallback>
                       </Avatar>
-                      <div className="mb-2">
-                        <div className="flex items-center gap-2">
-                          <h1 className="text-2xl font-bold">
+                      <div className="mb-0 min-w-0 sm:mb-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h1 className="min-w-0 break-words text-2xl font-bold leading-tight">
                             {profile.displayName || profile.username}
                           </h1>
                           <span
-                            className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary"
+                            className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary"
                             title="Tài khoản Influencer đã xác minh quyền tác giả"
                           >
                             <ShieldCheck className="h-3.5 w-3.5" />
@@ -151,20 +208,13 @@ export default function ProfilePage({ params }) {
                       </div>
                     </div>
 
-                    {isOwner ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setEditModalOpen(true)}
-                        className="rounded-full gap-2 text-xs font-semibold self-start sm:self-end"
-                      >
-                        <Edit3 className="h-3.5 w-3.5" />
-                        Chỉnh sửa hồ sơ
-                      </Button>
-                    ) : currentUser ? (
+                    {!isOwner && currentUser ? (
                       <div className="flex gap-2 self-start sm:self-end">
                         <Button size="sm" variant="outline" onClick={() => setMessageOpen(true)} className="rounded-full gap-2 text-xs font-semibold">
                           <ChatCircle size={15} weight="light" /> Nhắn tin
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => setReportOpen(true)} className="rounded-full gap-2 text-xs font-semibold">
+                          <Flag className="h-3.5 w-3.5" /> Báo cáo
                         </Button>
                         <Button size="sm" onClick={toggleFollow} className="rounded-full gap-2 text-xs font-semibold">
                           <UserPlus size={15} weight="light" /> {profile.isFollowing ? "Đang theo dõi" : "Theo dõi"}
@@ -259,7 +309,7 @@ export default function ProfilePage({ params }) {
                     <span className="text-xl font-bold text-foreground">
                       {profile.posts?.length || 0}
                     </span>
-                    <p className="text-[11px] text-muted-foreground uppercase font-semibold">
+                    <p className="text-[10px] font-semibold uppercase text-muted-foreground sm:text-[11px]">
                       Bài viết gốc
                     </p>
                   </div>
@@ -267,17 +317,17 @@ export default function ProfilePage({ params }) {
                     <span className="text-xl font-bold text-foreground">
                       {profile._count?.comments || 0}
                     </span>
-                    <p className="text-[11px] text-muted-foreground uppercase font-semibold">
+                    <p className="text-[10px] font-semibold uppercase text-muted-foreground sm:text-[11px]">
                       Lượt phản hồi
                     </p>
                   </div>
                   <div>
                     <span className="text-xl font-bold text-foreground">{profile._count?.followers || 0}</span>
-                    <p className="text-[11px] text-muted-foreground uppercase font-semibold">Người theo dõi</p>
+                    <p className="text-[10px] font-semibold uppercase text-muted-foreground sm:text-[11px]">Người theo dõi</p>
                   </div>
                   <div>
                     <span className="text-xl font-bold text-foreground">{profile._count?.following || 0}</span>
-                    <p className="text-[11px] text-muted-foreground uppercase font-semibold">Đang theo dõi</p>
+                    <p className="text-[10px] font-semibold uppercase text-muted-foreground sm:text-[11px]">Đang theo dõi</p>
                   </div>
                 </div>
               </div>
@@ -310,10 +360,11 @@ export default function ProfilePage({ params }) {
                     >
                       <PostCard
                         author={{
-                          id: profile.id,
-                          username: profile.username,
-                          displayName: profile.displayName,
-                          role: profile.role,
+                          id: post.author?.id || profile.id,
+                          username: post.author?.username || profile.username,
+                          displayName: post.author?.displayName || profile.displayName,
+                          role: post.author?.role || profile.role,
+                          avatarUrl: post.author?.avatarUrl || profile.avatarUrl,
                         }}
                         time={post.createdAt}
                         content={post.content}
@@ -339,19 +390,8 @@ export default function ProfilePage({ params }) {
           )}
         </section>
 
-        <div className="hidden lg:block lg:col-start-3"><RightSidebar /></div>
+        <div className="hidden min-w-0 justify-self-end lg:col-start-3 lg:block xl:col-start-5"><RightSidebar /></div>
       </div>
-
-      {profile && (
-        <OnboardingModal
-          isOpen={editModalOpen}
-          user={profile}
-          onComplete={(updated) => {
-            setProfile((prev) => ({ ...prev, ...updated }))
-            setEditModalOpen(false)
-          }}
-        />
-      )}
 
       {messageOpen && profile && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="message-dialog-title" onKeyDown={(event) => { if (event.key === "Escape") setMessageOpen(false) }} onClick={() => setMessageOpen(false)}>
@@ -362,6 +402,28 @@ export default function ProfilePage({ params }) {
               <div className="mt-4 flex justify-end gap-2">
                 <Button type="button" variant="ghost" onClick={() => setMessageOpen(false)} className="rounded-full">Hủy</Button>
                 <Button type="submit" disabled={sendingMessage || !messageText.trim()} className="rounded-full">{sendingMessage ? "Đang gửi..." : "Gửi tin nhắn"}</Button>
+              </div>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {reportOpen && profile && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="profile-report-title" onKeyDown={(event) => { if (event.key === "Escape") setReportOpen(false) }} onClick={() => setReportOpen(false)}>
+          <form onSubmit={reportUser} onClick={(event) => event.stopPropagation()} className="bezel w-full max-w-md">
+            <div className="bezel-core p-6">
+              <h2 id="profile-report-title" className="text-xl font-semibold">Báo cáo {profile.displayName || profile.username}</h2>
+              <label className="mt-5 block text-xs font-semibold text-muted-foreground">Lý do</label>
+              <select value={reportReason} onChange={(event) => setReportReason(event.target.value)} className="mt-1 h-11 w-full rounded-xl bg-muted px-3 text-sm outline-none">
+                {reportReasons.map((reason) => (
+                  <option key={reason.value} value={reason.value}>{reason.label}</option>
+                ))}
+              </select>
+              <label className="mt-4 block text-xs font-semibold text-muted-foreground">Chi tiết thêm</label>
+              <textarea value={reportDetails} onChange={(event) => setReportDetails(event.target.value)} maxLength={1000} placeholder="Mô tả ngắn điều cần admin xem xét..." className="mt-1 min-h-28 w-full resize-none rounded-[1.25rem] bg-muted p-4 text-sm outline-none" />
+              <div className="mt-4 flex justify-end gap-2">
+                <Button type="button" variant="ghost" onClick={() => setReportOpen(false)} disabled={reporting} className="rounded-full">Hủy</Button>
+                <Button type="submit" disabled={reporting} className="rounded-full">{reporting ? "Đang gửi..." : "Gửi báo cáo"}</Button>
               </div>
             </div>
           </form>

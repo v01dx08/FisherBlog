@@ -12,6 +12,7 @@ import {
 import { avatarUploadFilename, isValidAvatarAsset, matchesFileSignature } from "../src/lib/storage.js"
 import { validatePublicationInput } from "../src/lib/publications.js"
 import { buildRateLimitKey } from "../src/lib/rate-limit.js"
+import { reportTargetData, validateModerationAction, validateReportInput } from "../src/lib/moderation.js"
 
 test("identity values normalize consistently", () => {
   assert.equal(normalizeIdentity("  MinhDucFishing  "), "minhducfishing")
@@ -70,4 +71,16 @@ test("rate-limit keys hide raw identity and remain scope-specific", () => {
   assert.equal(first, buildRateLimitKey("posts.create", "user-1"))
   assert.notEqual(first, buildRateLimitKey("messages.send", "user-1"))
   assert.equal(first.includes("user-1"), false)
+})
+
+test("content reports require valid target, reason, and moderation action", () => {
+  assert.deepEqual(
+    validateReportInput({ targetType: "post", targetId: "post-1", reason: "spam", details: "Repeated ads" }),
+    { targetType: "POST", targetId: "post-1", reason: "SPAM", details: "Repeated ads" }
+  )
+  assert.deepEqual(reportTargetData("COMMENT", "comment-1"), { commentId: "comment-1" })
+  assert.equal(validateModerationAction({ action: "remove_post" }).action, "REMOVE_POST")
+  assert.throws(() => validateReportInput({ targetType: "POST", targetId: "", reason: "SPAM" }))
+  assert.throws(() => validateReportInput({ targetType: "POST", targetId: "post-1", reason: "BAD_REASON" }))
+  assert.throws(() => validateModerationAction({ action: "PUBLISH_ANYWAY" }))
 })

@@ -53,6 +53,7 @@ export async function getCurrentUser(request) {
       sessionVersion: true,
       displayName: true,
       avatarUrl: true,
+      coverUrl: true,
       bio: true,
       location: true,
       fishingStyle: true,

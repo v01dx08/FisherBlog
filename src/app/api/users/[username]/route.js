@@ -4,7 +4,7 @@ import { error, handleRouteError, json, readJson, RequestError } from "@/lib/htt
 import { serializePost } from "@/lib/posts"
 import { assertOwnProfile, assertSameOrigin, normalizeIdentity, optionalText, validateHttpUrl } from "@/lib/security"
 import { enforceRateLimit } from "@/lib/rate-limit"
-import { avatarUploadFilename, isValidAvatarAsset } from "@/lib/storage"
+import { avatarUploadFilename, isValidAvatarAsset, isValidCoverAsset } from "@/lib/storage"
 
 const authorSelect = {
   id: true,
@@ -12,6 +12,7 @@ const authorSelect = {
   displayName: true,
   role: true,
   avatarUrl: true,
+  coverUrl: true,
 }
 
 export async function GET(request, { params }) {
@@ -28,6 +29,7 @@ export async function GET(request, { params }) {
         username: true,
         displayName: true,
         avatarUrl: true,
+        coverUrl: true,
         bio: true,
         location: true,
         fishingStyle: true,
@@ -131,6 +133,24 @@ export async function PUT(request, { params }) {
       data.avatarUrl = avatarUrl
     }
 
+    if (Object.hasOwn(body, "coverUrl")) {
+      let coverUrl = validateHttpUrl(body.coverUrl, "Ảnh bìa")
+      if (coverUrl) {
+        const filename = avatarUploadFilename(coverUrl, request.headers.get("origin") || new URL(request.url).origin)
+        if (new URL(coverUrl).pathname.startsWith("/api/uploads/") && !filename) {
+          throw new RequestError("Ảnh bìa tải lên không hợp lệ", 400)
+        }
+        if (filename) {
+          const asset = await db.mediaAsset.findUnique({ where: { filename } })
+          if (!asset || asset.ownerId !== target.id || !isValidCoverAsset(asset)) {
+            throw new RequestError("Ảnh bìa không hợp lệ hoặc không thuộc tài khoản này", 400)
+          }
+          coverUrl = `/api/uploads/${filename}`
+        }
+      }
+      data.coverUrl = coverUrl
+    }
+
     if (Object.hasOwn(body, "displayName")) data.displayName = optionalText(body.displayName, { name: "Tên hiển thị", max: 80 })
     if (Object.hasOwn(body, "bio")) data.bio = optionalText(body.bio, { name: "Tiểu sử", max: 500 })
     if (Object.hasOwn(body, "location")) data.location = optionalText(body.location, { name: "Địa điểm", max: 120 })
@@ -148,6 +168,7 @@ export async function PUT(request, { params }) {
         username: true,
         displayName: true,
         avatarUrl: true,
+        coverUrl: true,
         bio: true,
         location: true,
         fishingStyle: true,

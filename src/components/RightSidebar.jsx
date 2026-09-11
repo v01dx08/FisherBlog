@@ -1,16 +1,14 @@
 "use client"
 
-import { Check, Fingerprint, Fish, Info, LinkSimple, MapPin, Medal, Plus, UploadSimple, Waves } from "@phosphor-icons/react"
+import { Check, Fingerprint, Fish, LinkSimple, MapPin, Medal, Plus, UploadSimple } from "@phosphor-icons/react"
 import Link from "next/link"
 import { useEffect, useState } from "react"
-import { WaterConditionsModal } from "@/components/WaterConditionsModal"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
 export function RightSidebar() {
   const [anglers, setAnglers] = useState([])
   const [catches, setCatches] = useState([])
   const [followingMap, setFollowingMap] = useState({})
-  const [waterModalOpen, setWaterModalOpen] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -108,18 +106,7 @@ export function RightSidebar() {
           </div>
         </section>
 
-        <button type="button" onClick={() => setWaterModalOpen(true)} className="water-panel kinetic w-full rounded-2xl p-4 text-left hover:-translate-y-0.5 active:translate-y-0">
-          <div className="flex items-center justify-between">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/18 text-primary"><Waves size={20} weight="duotone" /></span>
-            <Info size={16} weight="bold" className="text-muted-foreground" />
-          </div>
-          <h2 className="mt-4 text-sm font-bold">Điều kiện mặt nước</h2>
-          <p className="mt-1 text-xs leading-5 text-muted-foreground">Xem thời tiết, áp suất và đánh giá thời điểm đi câu.</p>
-          <span className="mt-3 inline-flex text-xs font-bold text-primary">Mở bảng phân tích</span>
-        </button>
       </aside>
-
-      <WaterConditionsModal isOpen={waterModalOpen} onClose={() => setWaterModalOpen(false)} />
     </>
   )
 }

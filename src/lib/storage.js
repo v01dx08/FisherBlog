@@ -4,6 +4,7 @@ import path from "node:path"
 export const UPLOAD_DIR = path.resolve(/* turbopackIgnore: true */ process.env.UPLOAD_DIR || "data/uploads")
 export const MAX_UPLOAD_BYTES = 15 * 1024 * 1024
 export const MAX_AVATAR_BYTES = 5 * 1024 * 1024
+export const MAX_COVER_BYTES = 8 * 1024 * 1024
 
 const ALLOWED_TYPES = new Map([
   ["image/jpeg", ".jpg"],
@@ -51,6 +52,10 @@ export function avatarUploadFilename(value, expectedOrigin) {
 
 export function isValidAvatarAsset(asset) {
   return Boolean(asset?.mimeType?.startsWith("image/") && asset.size > 0 && asset.size <= MAX_AVATAR_BYTES)
+}
+
+export function isValidCoverAsset(asset) {
+  return Boolean(asset?.mimeType?.startsWith("image/") && asset.size > 0 && asset.size <= MAX_COVER_BYTES)
 }
 
 export function safeUploadPath(filename) {
