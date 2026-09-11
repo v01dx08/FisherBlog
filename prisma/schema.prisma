@@ -23,6 +23,18 @@ enum PostVisibility {
   PRIVATE
 }
 
+enum ReportTargetType {
+  POST
+  COMMENT
+  USER
+}
+
+enum ReportStatus {
+  OPEN
+  DISMISSED
+  ACTION_TAKEN
+}
+
 model User {
   id                 String     @id @default(uuid())
   username           String     @unique
@@ -51,6 +63,8 @@ model User {
   comments           Comment[]
   likes              Like[]
   bookmarks          Bookmark[]
+  reportsMade        Report[]                 @relation("reportReporter")
+  reportsAgainstUser Report[]                 @relation("reportTargetUser")
 
   followers Follow[] @relation("following")
   following Follow[] @relation("follower")
@@ -79,6 +93,7 @@ model Post {
   notifications Notification[]
   mediaAssets   MediaAsset[]
   publications  PostPublication[]
+  reports       Report[]
   visibility    PostVisibility    @default(PUBLIC)
   species       String?
   weightKg      Float?
@@ -101,6 +116,7 @@ model Comment {
   post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
   authorId  String
   author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  reports   Report[]
   createdAt DateTime @default(now())
 
   @@index([postId, createdAt])
@@ -250,4 +266,30 @@ model PostPublication {
 
   @@unique([postId, url])
   @@index([postId, createdAt])
+}
+
+model Report {
+  id             String           @id @default(uuid())
+  reporterId     String
+  reporter       User             @relation("reportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  targetType     ReportTargetType
+  reason         String
+  details        String?
+  status         ReportStatus     @default(OPEN)
+  postId         String?
+  post           Post?            @relation(fields: [postId], references: [id], onDelete: Cascade)
+  commentId      String?
+  comment        Comment?         @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  targetUserId   String?
+  targetUser     User?            @relation("reportTargetUser", fields: [targetUserId], references: [id], onDelete: Cascade)
+  resolvedById   String?
+  resolution     String?
+  resolvedAt     DateTime?
+  createdAt      DateTime         @default(now())
+
+  @@unique([reporterId, postId])
+  @@unique([reporterId, commentId])
+  @@unique([reporterId, targetUserId])
+  @@index([status, createdAt])
+  @@index([targetType, createdAt])
 }

@@ -7,6 +7,7 @@ import {
   ChatCircle,
   DotsThree,
   Fish,
+  Flag,
   GlobeHemisphereWest,
   ImageSquare,
   LinkSimple,
@@ -76,6 +77,17 @@ function previewTileClass(count, index) {
   if (count >= 5) return "col-span-2"
   return ""
 }
+
+const reportReasons = [
+  { value: "SPAM", label: "Spam hoặc quảng cáo" },
+  { value: "HARASSMENT", label: "Quấy rối hoặc công kích" },
+  { value: "MISINFORMATION", label: "Thông tin sai lệch" },
+  { value: "ILLEGAL_ACTIVITY", label: "Hoạt động không phù hợp" },
+  { value: "COPYRIGHT", label: "Vi phạm bản quyền" },
+  { value: "NUDITY", label: "Nội dung nhạy cảm" },
+  { value: "VIOLENCE", label: "Bạo lực hoặc nguy hiểm" },
+  { value: "OTHER", label: "Lý do khác" },
+]
 
 export function CreatePostBox({
   onPostCreated,
@@ -340,12 +352,17 @@ export function PostCard({
   const [copied, setCopied] = React.useState(false)
   const [actionError, setActionError] = React.useState("")
   const [deleteArmed, setDeleteArmed] = React.useState(false)
+  const [reportTarget, setReportTarget] = React.useState(null)
+  const [reportReason, setReportReason] = React.useState("SPAM")
+  const [reportDetails, setReportDetails] = React.useState("")
+  const [reporting, setReporting] = React.useState(false)
 
   const authorObject = typeof author === "object" ? author : { username: author }
   const authorName = authorObject.displayName || authorObject.username || "Cần thủ"
   const authorUsername = authorObject.username || "user"
   const initials = authorName.slice(0, 2).toUpperCase()
   const canDelete = currentUser && (currentUser.id === authorObject.id || currentUser.role === "ADMIN")
+  const canReportPost = currentUser && currentUser.id !== authorObject.id
   const media = React.useMemo(() => {
     const items = []
     if (videoUrl) items.push({ type: "video", url: videoUrl })
@@ -443,6 +460,43 @@ export function PostCard({
     else setActionError(data.error || "Không thể xóa nhật ký")
   }
 
+  const openReport = (target) => {
+    if (!currentUser) return router.push("/login")
+    setReportTarget(target)
+    setReportReason("SPAM")
+    setReportDetails("")
+    setActionError("")
+    setMenuOpen(false)
+  }
+
+  const submitReport = async (event) => {
+    event.preventDefault()
+    if (!reportTarget || reporting) return
+    setReporting(true)
+    setActionError("")
+    try {
+      const response = await fetch("/api/reports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetType: reportTarget.type,
+          targetId: reportTarget.id,
+          reason: reportReason,
+          details: reportDetails,
+        }),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || "Không thể gửi báo cáo")
+      setReportTarget(null)
+      setReportDetails("")
+      setActionError(data.alreadyReported ? "Bạn đã báo cáo nội dung này trước đó." : "Đã gửi báo cáo cho quản trị viên.")
+    } catch (caught) {
+      setActionError(caught.message || "Không thể gửi báo cáo")
+    } finally {
+      setReporting(false)
+    }
+  }
+
   return (
     <motion.article
       layout
@@ -475,15 +529,24 @@ export function PostCard({
             <button type="button" onClick={toggleBookmark} aria-label={bookmarked ? "Bỏ lưu" : "Lưu bài viết"} className={`kinetic flex h-9 w-9 items-center justify-center rounded-full hover:bg-muted ${bookmarked ? "text-primary" : "text-muted-foreground"}`}>
               <BookmarkSimple size={18} weight={bookmarked ? "fill" : "light"} />
             </button>
-            {canDelete && (
+            {(canDelete || canReportPost) && (
               <>
                 <button type="button" onClick={() => { setMenuOpen((open) => !open); setDeleteArmed(false) }} aria-label="Tùy chọn bài viết" aria-expanded={menuOpen} className="kinetic flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted">
                   <DotsThree size={20} weight="bold" />
                 </button>
                 {menuOpen && (
-                  <button type="button" onClick={remove} className="absolute right-0 top-11 z-10 flex w-40 items-center gap-2 rounded-2xl bg-popover px-4 py-3 text-xs font-semibold text-destructive ring-1 ring-foreground/10 shadow-xl">
-                    <Trash size={16} weight="light" /> {deleteArmed ? "Xác nhận xóa" : "Xóa nhật ký"}
-                  </button>
+                  <div className="absolute right-0 top-11 z-10 w-44 overflow-hidden rounded-2xl bg-popover p-1 text-xs font-semibold ring-1 ring-foreground/10 shadow-xl">
+                    {canReportPost && (
+                      <button type="button" onClick={() => openReport({ type: "POST", id: postId, label: "bài viết này" })} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-muted-foreground hover:bg-muted hover:text-foreground">
+                        <Flag size={16} weight="light" /> Báo cáo bài viết
+                      </button>
+                    )}
+                    {canDelete && (
+                      <button type="button" onClick={remove} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-destructive hover:bg-destructive/10">
+                        <Trash size={16} weight="light" /> {deleteArmed ? "Xác nhận xóa" : "Xóa nhật ký"}
+                      </button>
+                    )}
+                  </div>
                 )}
               </>
             )}
@@ -525,6 +588,45 @@ export function PostCard({
 
         {actionError && <p role="alert" className="mx-4 mb-3 rounded-xl bg-destructive/10 px-4 py-3 text-xs text-destructive sm:mx-5">{actionError}</p>}
 
+        {reportTarget && (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-background/80 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby={`report-title-${postId}`} onClick={() => !reporting && setReportTarget(null)}>
+            <form onSubmit={submitReport} onClick={(event) => event.stopPropagation()} className="w-full max-w-md rounded-2xl border border-border/70 bg-card p-5 shadow-2xl">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 id={`report-title-${postId}`} className="text-base font-bold">Báo cáo {reportTarget.label}</h2>
+                  <p className="mt-1 text-xs leading-5 text-muted-foreground">Quản trị viên sẽ xem xét nội dung này trong bảng kiểm duyệt.</p>
+                </div>
+                <button type="button" onClick={() => setReportTarget(null)} disabled={reporting} aria-label="Đóng báo cáo" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50">
+                  <X size={15} weight="light" />
+                </button>
+              </div>
+
+              <label className="mt-4 block text-xs font-semibold text-muted-foreground">Lý do</label>
+              <select value={reportReason} onChange={(event) => setReportReason(event.target.value)} className="mt-1 h-11 w-full rounded-xl bg-muted px-3 text-sm outline-none ring-1 ring-border/60">
+                {reportReasons.map((reason) => (
+                  <option key={reason.value} value={reason.value}>{reason.label}</option>
+                ))}
+              </select>
+
+              <label className="mt-4 block text-xs font-semibold text-muted-foreground">Chi tiết thêm</label>
+              <textarea
+                value={reportDetails}
+                onChange={(event) => setReportDetails(event.target.value)}
+                maxLength={1000}
+                placeholder="Mô tả ngắn điều cần admin xem xét..."
+                className="mt-1 min-h-24 w-full resize-none rounded-xl bg-muted p-3 text-sm outline-none ring-1 ring-border/60"
+              />
+
+              <div className="mt-5 flex justify-end gap-2">
+                <button type="button" onClick={() => setReportTarget(null)} disabled={reporting} className="rounded-lg px-4 py-2.5 text-xs font-semibold hover:bg-muted disabled:opacity-50">Hủy</button>
+                <button type="submit" disabled={reporting} className="rounded-lg bg-primary px-4 py-2.5 text-xs font-bold text-primary-foreground disabled:opacity-50">
+                  {reporting ? "Đang gửi..." : "Gửi báo cáo"}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
         <AnimatePresence initial={false}>
           {commentsOpen && (
             <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 12 }} transition={{ duration: 0.32, ease: [0.32, 0.72, 0, 1] }} className="border-t border-border/60 bg-muted/25 p-5 sm:p-6">
@@ -545,13 +647,21 @@ export function PostCard({
                   <p className="py-4 text-center text-xs text-muted-foreground">Chưa có bình luận.</p>
                 ) : comments.map((item) => {
                   const name = item.author?.displayName || item.author?.username || "Cần thủ"
+                  const canReportComment = currentUser && item.author?.id !== currentUser.id
                   return (
                     <div key={item.id} className="flex gap-2.5">
                       <Avatar className="h-8 w-8">{item.author?.avatarUrl && <AvatarImage src={item.author.avatarUrl} alt={name} className="object-cover" />}<AvatarFallback className="bg-secondary text-[10px] font-semibold">{name.slice(0, 2).toUpperCase()}</AvatarFallback></Avatar>
                       <div className="flex-1 rounded-xl bg-card px-4 py-3 ring-1 ring-border/60">
                         <div className="flex justify-between gap-2">
                           <span className="text-xs font-semibold">{name}</span>
-                          <span className="text-[10px] text-muted-foreground">{formatTimeAgo(item.createdAt)}</span>
+                          <span className="flex shrink-0 items-center gap-2 text-[10px] text-muted-foreground">
+                            {formatTimeAgo(item.createdAt)}
+                            {canReportComment && (
+                              <button type="button" onClick={() => openReport({ type: "COMMENT", id: item.id, label: "bình luận này" })} className="rounded-full p-1 hover:bg-muted hover:text-foreground" aria-label="Báo cáo bình luận">
+                                <Flag size={12} weight="light" />
+                              </button>
+                            )}
+                          </span>
                         </div>
                         <p className="mt-1 text-xs leading-5">{item.content}</p>
                       </div>

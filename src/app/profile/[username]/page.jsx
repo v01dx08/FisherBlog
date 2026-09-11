@@ -15,11 +15,21 @@ import {
   Video,
   Globe,
   Share2,
+  Flag,
   FileText,
   MessageSquare,
 } from "lucide-react"
 import { motion } from "framer-motion"
 import { ChatCircle, UserPlus } from "@phosphor-icons/react"
+
+const reportReasons = [
+  { value: "SPAM", label: "Spam hoặc quảng cáo" },
+  { value: "HARASSMENT", label: "Quấy rối hoặc công kích" },
+  { value: "MISINFORMATION", label: "Thông tin sai lệch" },
+  { value: "ILLEGAL_ACTIVITY", label: "Hoạt động không phù hợp" },
+  { value: "COPYRIGHT", label: "Vi phạm bản quyền" },
+  { value: "OTHER", label: "Lý do khác" },
+]
 
 export default function ProfilePage({ params }) {
   const resolvedParams = use(params)
@@ -32,6 +42,10 @@ export default function ProfilePage({ params }) {
   const [messageOpen, setMessageOpen] = useState(false)
   const [messageText, setMessageText] = useState("")
   const [sendingMessage, setSendingMessage] = useState(false)
+  const [reportOpen, setReportOpen] = useState(false)
+  const [reportReason, setReportReason] = useState("SPAM")
+  const [reportDetails, setReportDetails] = useState("")
+  const [reporting, setReporting] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -101,6 +115,28 @@ export default function ProfilePage({ params }) {
     if (res.ok) {
       setMessageText("")
       setMessageOpen(false)
+    }
+  }
+
+  const reportUser = async (event) => {
+    event.preventDefault()
+    if (!profile || reporting) return
+    setReporting(true)
+    const res = await fetch("/api/reports", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        targetType: "USER",
+        targetId: profile.id,
+        reason: reportReason,
+        details: reportDetails,
+      }),
+    })
+    setReporting(false)
+    if (res.ok) {
+      setReportOpen(false)
+      setReportReason("SPAM")
+      setReportDetails("")
     }
   }
 
@@ -176,6 +212,9 @@ export default function ProfilePage({ params }) {
                       <div className="flex gap-2 self-start sm:self-end">
                         <Button size="sm" variant="outline" onClick={() => setMessageOpen(true)} className="rounded-full gap-2 text-xs font-semibold">
                           <ChatCircle size={15} weight="light" /> Nhắn tin
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => setReportOpen(true)} className="rounded-full gap-2 text-xs font-semibold">
+                          <Flag className="h-3.5 w-3.5" /> Báo cáo
                         </Button>
                         <Button size="sm" onClick={toggleFollow} className="rounded-full gap-2 text-xs font-semibold">
                           <UserPlus size={15} weight="light" /> {profile.isFollowing ? "Đang theo dõi" : "Theo dõi"}
@@ -363,6 +402,28 @@ export default function ProfilePage({ params }) {
               <div className="mt-4 flex justify-end gap-2">
                 <Button type="button" variant="ghost" onClick={() => setMessageOpen(false)} className="rounded-full">Hủy</Button>
                 <Button type="submit" disabled={sendingMessage || !messageText.trim()} className="rounded-full">{sendingMessage ? "Đang gửi..." : "Gửi tin nhắn"}</Button>
+              </div>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {reportOpen && profile && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="profile-report-title" onKeyDown={(event) => { if (event.key === "Escape") setReportOpen(false) }} onClick={() => setReportOpen(false)}>
+          <form onSubmit={reportUser} onClick={(event) => event.stopPropagation()} className="bezel w-full max-w-md">
+            <div className="bezel-core p-6">
+              <h2 id="profile-report-title" className="text-xl font-semibold">Báo cáo {profile.displayName || profile.username}</h2>
+              <label className="mt-5 block text-xs font-semibold text-muted-foreground">Lý do</label>
+              <select value={reportReason} onChange={(event) => setReportReason(event.target.value)} className="mt-1 h-11 w-full rounded-xl bg-muted px-3 text-sm outline-none">
+                {reportReasons.map((reason) => (
+                  <option key={reason.value} value={reason.value}>{reason.label}</option>
+                ))}
+              </select>
+              <label className="mt-4 block text-xs font-semibold text-muted-foreground">Chi tiết thêm</label>
+              <textarea value={reportDetails} onChange={(event) => setReportDetails(event.target.value)} maxLength={1000} placeholder="Mô tả ngắn điều cần admin xem xét..." className="mt-1 min-h-28 w-full resize-none rounded-[1.25rem] bg-muted p-4 text-sm outline-none" />
+              <div className="mt-4 flex justify-end gap-2">
+                <Button type="button" variant="ghost" onClick={() => setReportOpen(false)} disabled={reporting} className="rounded-full">Hủy</Button>
+                <Button type="submit" disabled={reporting} className="rounded-full">{reporting ? "Đang gửi..." : "Gửi báo cáo"}</Button>
               </div>
             </div>
           </form>

@@ -43,3 +43,5 @@ next-env.d.ts
 # node files
 node_modules/
 .npm-cache/
+
+docs/

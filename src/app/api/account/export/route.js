@@ -36,6 +36,7 @@ export async function GET(request) {
         followers: true,
         sentMessages: true,
         auditLogs: true,
+        reportsMade: true,
       },
     })
 
