@@ -36,10 +36,11 @@ export async function POST(request) {
       throw new RequestError("Tệp cần nhỏ hơn 15 MB", 413)
     }
 
-    const extension = extensionForMime(file.type)
+    const normalizedMime = String(file.type || "").split(";")[0].trim().toLowerCase()
+    const extension = extensionForMime(normalizedMime)
     if (!extension) throw new RequestError("Chỉ hỗ trợ JPG, PNG, WebP, GIF, MP4, WebM hoặc voice WebM", 415)
     const buffer = Buffer.from(await file.arrayBuffer())
-    if (!matchesFileSignature(buffer, file.type)) {
+    if (!matchesFileSignature(buffer, normalizedMime)) {
       throw new RequestError("Nội dung tệp không khớp định dạng khai báo", 415)
     }
 
@@ -54,7 +55,7 @@ export async function POST(request) {
       await db.mediaAsset.create({
         data: {
           filename,
-          mimeType: file.type,
+          mimeType: normalizedMime,
           size: file.size,
           sha256,
           ownerId: user.id,
@@ -66,7 +67,7 @@ export async function POST(request) {
     }
 
     // ponytail: Local volume supports one Docker node. Move this adapter to S3/R2 before horizontal scaling.
-    return json({ url: `/api/uploads/${filename}`, type: file.type, size: file.size, sha256 }, 201)
+    return json({ url: `/api/uploads/${filename}`, type: normalizedMime, size: file.size, sha256 }, 201)
   } catch (caught) {
     return handleRouteError("uploads.create", caught, request)
   }

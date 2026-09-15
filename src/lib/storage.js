@@ -18,20 +18,25 @@ const ALLOWED_TYPES = new Map([
 
 const MIME_BY_EXTENSION = new Map([...ALLOWED_TYPES.entries()].map(([mime, extension]) => [extension, mime]))
 
+function baseMime(mime = "") {
+  return String(mime).split(";")[0].trim().toLowerCase()
+}
+
 export function extensionForMime(mime) {
-  return ALLOWED_TYPES.get(mime) || null
+  return ALLOWED_TYPES.get(baseMime(mime)) || null
 }
 
 export function matchesFileSignature(buffer, mime) {
+  const normalizedMime = baseMime(mime)
   const bytes = new Uint8Array(buffer)
   const ascii = String.fromCharCode(...bytes.slice(0, 16))
-  if (mime === "image/jpeg") return bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
-  if (mime === "image/png") return bytes.slice(0, 8).every((byte, index) => byte === [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a][index])
-  if (mime === "image/gif") return ascii.startsWith("GIF87a") || ascii.startsWith("GIF89a")
-  if (mime === "image/webp") return ascii.startsWith("RIFF") && ascii.slice(8, 12) === "WEBP"
-  if (mime === "video/mp4") return ascii.slice(4, 8) === "ftyp"
-  if (mime === "video/webm") return bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3
-  if (mime === "audio/webm") return bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3
+  if (normalizedMime === "image/jpeg") return bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
+  if (normalizedMime === "image/png") return bytes.slice(0, 8).every((byte, index) => byte === [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a][index])
+  if (normalizedMime === "image/gif") return ascii.startsWith("GIF87a") || ascii.startsWith("GIF89a")
+  if (normalizedMime === "image/webp") return ascii.startsWith("RIFF") && ascii.slice(8, 12) === "WEBP"
+  if (normalizedMime === "video/mp4") return ascii.slice(4, 8) === "ftyp"
+  if (normalizedMime === "video/webm") return bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3
+  if (normalizedMime === "audio/webm") return bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3
   return false
 }
 
