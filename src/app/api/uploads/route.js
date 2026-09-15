@@ -25,7 +25,7 @@ export async function POST(request) {
     const file = form.get("file")
     const purpose = form.get("purpose")
     if (!(file instanceof File)) throw new RequestError("Thiếu tệp tải lên", 400)
-    if (purpose && !["avatar", "cover"].includes(purpose)) throw new RequestError("Mục đích tải lên không hợp lệ", 400)
+    if (purpose && !["avatar", "cover", "message"].includes(purpose)) throw new RequestError("Mục đích tải lên không hợp lệ", 400)
     if (purpose === "avatar" && (!file.type.startsWith("image/") || file.size > MAX_AVATAR_BYTES)) {
       throw new RequestError("Ảnh đại diện phải là JPG, PNG, WebP hoặc GIF và nhỏ hơn 5 MB", 415)
     }
@@ -37,7 +37,7 @@ export async function POST(request) {
     }
 
     const extension = extensionForMime(file.type)
-    if (!extension) throw new RequestError("Chỉ hỗ trợ JPG, PNG, WebP, GIF, MP4 hoặc WebM", 415)
+    if (!extension) throw new RequestError("Chỉ hỗ trợ JPG, PNG, WebP, GIF, MP4, WebM hoặc voice WebM", 415)
     const buffer = Buffer.from(await file.arrayBuffer())
     if (!matchesFileSignature(buffer, file.type)) {
       throw new RequestError("Nội dung tệp không khớp định dạng khai báo", 415)
