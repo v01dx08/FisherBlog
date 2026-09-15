@@ -18,6 +18,7 @@ import {
   Video,
   ExternalLink,
   Flag,
+  Lightbulb,
   MessageSquare,
   Ban,
 } from "lucide-react"
@@ -54,7 +55,9 @@ export default function AdminDashboard() {
   const [users, setUsers] = useState([])
   const [posts, setPosts] = useState([])
   const [reports, setReports] = useState([])
+  const [feedbackItems, setFeedbackItems] = useState([])
   const [openReportCount, setOpenReportCount] = useState(0)
+  const [openFeedbackCount, setOpenFeedbackCount] = useState(0)
   const [stats, setStats] = useState(null)
   const [newUsername, setNewUsername] = useState("")
   const [newEmail, setNewEmail] = useState("")
@@ -62,6 +65,7 @@ export default function AdminDashboard() {
   const [userSearchQuery, setUserSearchQuery] = useState("")
   const [postSearchQuery, setPostSearchQuery] = useState("")
   const [reportSearchQuery, setReportSearchQuery] = useState("")
+  const [feedbackSearchQuery, setFeedbackSearchQuery] = useState("")
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [feedback, setFeedback] = useState({ type: "", message: "" })
@@ -74,14 +78,17 @@ export default function AdminDashboard() {
       fetch("/api/posts?limit=30").then((r) => r.json()),
       fetch("/api/admin/stats").then((r) => r.json()),
       fetch("/api/admin/reports?status=OPEN&limit=100").then((r) => r.json()),
+      fetch("/api/admin/feedback?status=OPEN&limit=100").then((r) => r.json()),
     ])
-      .then(([usersRes, postsRes, statsRes, reportsRes]) => {
+      .then(([usersRes, postsRes, statsRes, reportsRes, feedbackRes]) => {
         if (!active) return
         if (Array.isArray(usersRes)) setUsers(usersRes)
         if (Array.isArray(postsRes.items)) setPosts(postsRes.items)
         if (statsRes && !statsRes.error) setStats(statsRes)
         if (Array.isArray(reportsRes.items)) setReports(reportsRes.items)
         if (reportsRes.counts) setOpenReportCount(reportsRes.counts.open || 0)
+        if (Array.isArray(feedbackRes.items)) setFeedbackItems(feedbackRes.items)
+        if (feedbackRes.counts) setOpenFeedbackCount(feedbackRes.counts.open || 0)
       })
       .catch(() => active && setFeedback({ type: "error", message: "Lỗi kết nối máy chủ khi tải dữ liệu quản trị." }))
       .finally(() => active && setLoading(false))
@@ -220,6 +227,28 @@ export default function AdminDashboard() {
     }
   }
 
+  const handleFeedbackStatus = async (item, status) => {
+    try {
+      const res = await fetch("/api/admin/feedback", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: item.id, status }),
+      })
+      const data = await res.json()
+
+      if (!res.ok) {
+        setFeedback({ type: "error", message: data.error || "Không thể cập nhật feedback." })
+        return
+      }
+
+      setFeedbackItems((prev) => prev.filter((feedbackItem) => feedbackItem.id !== item.id))
+      if (item.status === "OPEN") setOpenFeedbackCount((count) => Math.max(0, count - 1))
+      setFeedback({ type: "success", message: "Đã cập nhật feedback." })
+    } catch {
+      setFeedback({ type: "error", message: "Lỗi kết nối khi cập nhật feedback." })
+    }
+  }
+
   const filteredUsers = users.filter(
     (u) =>
       u.username.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
@@ -246,6 +275,20 @@ export default function AdminDashboard() {
       report.targetUser?.username,
     ].filter(Boolean).join(" ").toLowerCase()
     return targetText.includes(query)
+  })
+
+  const filteredFeedbackItems = feedbackItems.filter((item) => {
+    const query = feedbackSearchQuery.toLowerCase()
+    return [
+      item.category,
+      item.priority,
+      item.subject,
+      item.message,
+      item.contact,
+      item.user?.username,
+      item.user?.displayName,
+      item.user?.email,
+    ].filter(Boolean).join(" ").toLowerCase().includes(query)
   })
 
   return (
@@ -301,6 +344,17 @@ export default function AdminDashboard() {
             >
               <Flag className="h-3.5 w-3.5" />
               Báo cáo ({openReportCount})
+            </button>
+            <button
+              onClick={() => setActiveTab("feedback")}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
+                activeTab === "feedback"
+                  ? "bg-card text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Lightbulb className="h-3.5 w-3.5" />
+              Feedback ({openFeedbackCount})
             </button>
           </div>
         </div>
@@ -759,6 +813,77 @@ export default function AdminDashboard() {
                 <div className="text-center py-16 text-muted-foreground">
                   <Flag className="h-8 w-8 mx-auto mb-2 opacity-40" />
                   <p>Không có báo cáo nào đang chờ xử lý.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 4: PRODUCT FEEDBACK */}
+        {activeTab === "feedback" && (
+          <div className="bg-card rounded-3xl border border-border/60 shadow-sm overflow-hidden">
+            <div className="p-5 border-b border-border/40">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h2 className="font-semibold text-lg">Feedback cải thiện sản phẩm</h2>
+                  <p className="text-xs text-muted-foreground">
+                    Góp ý người dùng gửi từ trang /feedback để đội phát triển ưu tiên sửa web.
+                  </p>
+                </div>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <input
+                    type="search"
+                    placeholder="Tìm feedback..."
+                    value={feedbackSearchQuery}
+                    onChange={(e) => setFeedbackSearchQuery(e.target.value)}
+                    className="h-9 w-full rounded-lg bg-muted/60 pl-9 pr-3 text-sm outline-none placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/20 sm:w-64"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="divide-y divide-border/40">
+              {filteredFeedbackItems.map((item) => (
+                <div key={item.id} className="p-5 hover:bg-muted/20 transition-colors">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-bold text-primary">
+                          <Lightbulb className="h-3.5 w-3.5" />
+                          {item.category}
+                        </span>
+                        <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
+                          {item.priority}
+                        </span>
+                        <span className="text-[11px] text-muted-foreground">
+                          {new Date(item.createdAt).toLocaleString("vi-VN")}
+                        </span>
+                      </div>
+
+                      <h3 className="mt-3 text-sm font-bold">{item.subject}</h3>
+                      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-foreground/80">{item.message}</p>
+                      <p className="mt-3 text-[11px] text-muted-foreground">
+                        Người gửi: {item.user ? `@${item.user.username}` : "Khách"}{item.contact ? ` · Liên hệ: ${item.contact}` : ""}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 lg:justify-end">
+                      <Button variant="outline" size="sm" onClick={() => handleFeedbackStatus(item, "REVIEWED")} className="h-9 rounded-xl text-xs">
+                        Đã xem
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleFeedbackStatus(item, "ARCHIVED")} className="h-9 rounded-xl text-xs">
+                        Lưu trữ
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {filteredFeedbackItems.length === 0 && (
+                <div className="text-center py-16 text-muted-foreground">
+                  <Lightbulb className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                  <p>Chưa có feedback mới.</p>
                 </div>
               )}
             </div>

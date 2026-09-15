@@ -35,6 +35,12 @@ enum ReportStatus {
   ACTION_TAKEN
 }
 
+enum FeedbackStatus {
+  OPEN
+  REVIEWED
+  ARCHIVED
+}
+
 model User {
   id                 String     @id @default(uuid())
   username           String     @unique
@@ -76,6 +82,7 @@ model User {
   conversationLinks ConversationParticipant[]
   auditLogs         AuditLog[]                @relation("auditActor")
   mediaAssets       MediaAsset[]
+  feedbackItems     Feedback[]
 
   @@index([createdAt])
 }
@@ -292,4 +299,22 @@ model Report {
   @@unique([reporterId, targetUserId])
   @@index([status, createdAt])
   @@index([targetType, createdAt])
+}
+
+model Feedback {
+  id        String         @id @default(uuid())
+  userId    String?
+  user      User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  category  String
+  priority  String
+  subject   String
+  message   String
+  contact   String?
+  status    FeedbackStatus @default(OPEN)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@index([status, createdAt])
+  @@index([userId, createdAt])
+  @@index([category, createdAt])
 }

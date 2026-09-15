@@ -13,6 +13,7 @@ import { avatarUploadFilename, isValidAvatarAsset, matchesFileSignature } from "
 import { validatePublicationInput } from "../src/lib/publications.js"
 import { buildRateLimitKey } from "../src/lib/rate-limit.js"
 import { reportTargetData, validateModerationAction, validateReportInput } from "../src/lib/moderation.js"
+import { validateFeedbackInput, validateFeedbackStatus } from "../src/lib/feedback.js"
 
 test("identity values normalize consistently", () => {
   assert.equal(normalizeIdentity("  MinhDucFishing  "), "minhducfishing")
@@ -44,6 +45,7 @@ test("upload signatures must match declared MIME", () => {
   const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zl1sAAAAASUVORK5CYII=", "base64")
   assert.equal(matchesFileSignature(png, "image/png"), true)
   assert.equal(matchesFileSignature(Buffer.from("<html>bad</html>"), "image/png"), false)
+  assert.equal(matchesFileSignature(Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0x01]), "audio/webm;codecs=opus"), true)
 })
 
 test("avatar uploads stay image-only, same-origin and size-limited", () => {
@@ -83,4 +85,27 @@ test("content reports require valid target, reason, and moderation action", () =
   assert.throws(() => validateReportInput({ targetType: "POST", targetId: "", reason: "SPAM" }))
   assert.throws(() => validateReportInput({ targetType: "POST", targetId: "post-1", reason: "BAD_REASON" }))
   assert.throws(() => validateModerationAction({ action: "PUBLISH_ANYWAY" }))
+})
+
+test("product feedback requires useful category, priority, and content", () => {
+  assert.deepEqual(
+    validateFeedbackInput({
+      category: "ux",
+      priority: "high",
+      subject: "Mobile chat spacing",
+      message: "The chat composer feels too large on small mobile screens.",
+      contact: "tester@example.com",
+    }),
+    {
+      category: "UX",
+      priority: "HIGH",
+      subject: "Mobile chat spacing",
+      message: "The chat composer feels too large on small mobile screens.",
+      contact: "tester@example.com",
+    }
+  )
+  assert.equal(validateFeedbackStatus("reviewed"), "REVIEWED")
+  assert.throws(() => validateFeedbackInput({ category: "BAD", subject: "abcd", message: "valid enough message" }))
+  assert.throws(() => validateFeedbackInput({ category: "BUG", subject: "no", message: "short" }))
+  assert.throws(() => validateFeedbackStatus("DONE"))
 })

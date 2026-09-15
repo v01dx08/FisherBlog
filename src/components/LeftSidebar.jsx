@@ -2,6 +2,7 @@
 
 import {
   BookmarkSimple,
+  ChatCenteredText,
   Compass,
   Fish,
   Gear,
@@ -50,6 +51,7 @@ export function LeftSidebar() {
     { name: "Nhật ký đã lưu", icon: BookmarkSimple, href: "/?saved=true", active: false },
     ...(currentUser?.role === "ADMIN" ? [{ name: "Quản trị", icon: ShieldCheck, href: "/admin", active: pathname === "/admin" }] : []),
     { name: "Điều kiện mặt nước", icon: Waves, href: "/water-conditions", active: pathname === "/water-conditions" },
+    { name: "Góp ý cải thiện", icon: ChatCenteredText, href: "/feedback", active: pathname === "/feedback" },
     { name: "Pháp lý & bản quyền", icon: Scales, href: "/legal", active: pathname === "/legal" },
   ]
 

@@ -20,6 +20,7 @@ export function OnboardingModal({ isOpen, user, onComplete, onClose }) {
   const [avatarFile, setAvatarFile] = useState(null)
   const [coverFile, setCoverFile] = useState(null)
   const [pendingAvatarFile, setPendingAvatarFile] = useState(null)
+  const [pendingCoverFile, setPendingCoverFile] = useState(null)
   const [removeAvatar, setRemoveAvatar] = useState(false)
   const [removeCover, setRemoveCover] = useState(false)
   const [confirmRemoveAvatarOpen, setConfirmRemoveAvatarOpen] = useState(false)
@@ -46,6 +47,7 @@ export function OnboardingModal({ isOpen, user, onComplete, onClose }) {
   const closeModal = () => {
     if (submitting) return
     setPendingAvatarFile(null)
+    setPendingCoverFile(null)
     setConfirmRemoveAvatarOpen(false)
     if (avatarInputRef.current) avatarInputRef.current.value = ""
     if (coverInputRef.current) coverInputRef.current.value = ""
@@ -136,7 +138,7 @@ export function OnboardingModal({ isOpen, user, onComplete, onClose }) {
           initial={{ opacity: 0, scale: 0.95, y: 16 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 16 }}
-          className="custom-scrollbar relative max-h-[calc(100dvh-1.5rem)] w-full max-w-xl overflow-y-auto rounded-3xl border border-border/80 bg-card p-5 shadow-2xl sm:max-h-[calc(100dvh-2rem)] sm:p-8"
+          className="scrollbar-none relative max-h-[calc(100dvh-1.5rem)] w-full max-w-xl overflow-y-auto rounded-3xl border border-border/80 bg-card p-5 shadow-2xl sm:max-h-[calc(100dvh-2rem)] sm:p-8"
           onClick={(event) => event.stopPropagation()}
         >
           <button
@@ -175,7 +177,7 @@ export function OnboardingModal({ isOpen, user, onComplete, onClose }) {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="rounded-2xl border border-border/60 bg-muted/35 p-4">
-              <div className="relative aspect-[3/1] min-h-32 overflow-hidden rounded-2xl bg-gradient-to-r from-sky-600 via-cyan-700 to-teal-800">
+              <div className="relative h-32 w-full max-w-full overflow-hidden rounded-2xl bg-gradient-to-r from-sky-600 via-cyan-700 to-teal-800 sm:h-40">
                 {coverPreview && <img src={coverPreview} alt="Xem trước ảnh bìa" className="h-full w-full object-cover" />}
               </div>
               <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -197,8 +199,7 @@ export function OnboardingModal({ isOpen, user, onComplete, onClose }) {
                       return
                     }
                     setErrorMsg("")
-                    setCoverFile(file)
-                    setRemoveCover(false)
+                    setPendingCoverFile(file)
                   }}
                 />
                 <div className="flex flex-wrap gap-2">
@@ -206,7 +207,7 @@ export function OnboardingModal({ isOpen, user, onComplete, onClose }) {
                     <Camera className="h-4 w-4" /> {coverPreview ? "Đổi ảnh bìa" : "Chọn ảnh bìa"}
                   </Button>
                   {coverPreview && (
-                    <Button type="button" variant="ghost" size="sm" onClick={() => { setCoverFile(null); setRemoveCover(true); if (coverInputRef.current) coverInputRef.current.value = "" }} className="rounded-full gap-2 text-destructive hover:text-destructive">
+                    <Button type="button" variant="ghost" size="sm" onClick={() => { setCoverFile(null); setPendingCoverFile(null); setRemoveCover(true); if (coverInputRef.current) coverInputRef.current.value = "" }} className="rounded-full gap-2 text-destructive hover:text-destructive">
                       <Trash2 className="h-4 w-4" /> Xóa ảnh bìa
                     </Button>
                   )}
@@ -378,6 +379,22 @@ export function OnboardingModal({ isOpen, user, onComplete, onClose }) {
               setPendingAvatarFile(null)
               setRemoveAvatar(false)
               if (avatarInputRef.current) avatarInputRef.current.value = ""
+            }}
+          />
+
+          <AvatarCropper
+            key={pendingCoverFile ? `${pendingCoverFile.name}-${pendingCoverFile.size}-${pendingCoverFile.lastModified}` : "cover-cropper-empty"}
+            file={pendingCoverFile}
+            mode="cover"
+            onCancel={() => {
+              setPendingCoverFile(null)
+              if (coverInputRef.current) coverInputRef.current.value = ""
+            }}
+            onApply={(croppedFile) => {
+              setCoverFile(croppedFile)
+              setPendingCoverFile(null)
+              setRemoveCover(false)
+              if (coverInputRef.current) coverInputRef.current.value = ""
             }}
           />
 
