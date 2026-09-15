@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState } from "react"
-import { ArrowLeft, CheckCheck, ImagePlus, Loader2, MessageCircle, Mic, Minus, RotateCcw, Send, Smile, Sticker, ThumbsUp, X, ZoomIn } from "lucide-react"
+import { ArrowLeft, CheckCheck, ImagePlus, Loader2, MessageCircle, Mic, Minus, Pause, Play, RotateCcw, Send, Smile, Sticker, ThumbsUp, X, ZoomIn } from "lucide-react"
 import { Header } from "@/components/Header"
 import { LeftSidebar } from "@/components/LeftSidebar"
 import { RightSidebar } from "@/components/RightSidebar"
@@ -150,6 +150,104 @@ function previewMessage(content) {
   if (media.kind === "sticker") return "Đã gửi một sticker"
   if (media.kind === "gif") return media.label || "Đã gửi một GIF"
   return "Đã gửi một tệp"
+}
+
+function formatVoiceTime(seconds) {
+  if (!Number.isFinite(seconds) || seconds < 0) return "0:00"
+  const minutes = Math.floor(seconds / 60)
+  const rest = Math.floor(seconds % 60).toString().padStart(2, "0")
+  return `${minutes}:${rest}`
+}
+
+function VoiceMessagePlayer({ src, mine }) {
+  const audioRef = useRef(null)
+  const [playing, setPlaying] = useState(false)
+  const [duration, setDuration] = useState(0)
+  const [currentTime, setCurrentTime] = useState(0)
+  const waveBars = [16, 28, 20, 34, 18, 26, 38, 22, 30, 16, 36, 24, 18, 32, 40, 20, 28, 34]
+
+  useEffect(() => () => {
+    audioRef.current?.pause()
+  }, [])
+
+  const progress = duration > 0 ? Math.min(100, Math.max(0, currentTime / duration * 100)) : 0
+
+  const togglePlay = async () => {
+    const audio = audioRef.current
+    if (!audio) return
+    if (playing) {
+      audio.pause()
+      setPlaying(false)
+      return
+    }
+    try {
+      await audio.play()
+      setPlaying(true)
+    } catch {
+      setPlaying(false)
+    }
+  }
+
+  const seek = (event) => {
+    const audio = audioRef.current
+    if (!audio || !duration) return
+    const next = Number(event.target.value)
+    audio.currentTime = next
+    setCurrentTime(next)
+  }
+
+  return (
+    <div className={`w-[min(58vw,220px)] rounded-[1.25rem] px-2 py-2 shadow-sm ${mine ? "bg-primary/95 text-primary-foreground" : "bg-muted text-foreground"}`}>
+      <audio
+        ref={audioRef}
+        src={src}
+        preload="metadata"
+        onLoadedMetadata={(event) => setDuration(event.currentTarget.duration || 0)}
+        onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime || 0)}
+        onPause={() => setPlaying(false)}
+        onEnded={() => {
+          setPlaying(false)
+          setCurrentTime(0)
+        }}
+        className="hidden"
+      />
+      <div className="flex items-center gap-2">
+        <button type="button" onClick={togglePlay} className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full shadow-sm ${mine ? "bg-white text-primary hover:bg-white/90" : "bg-primary text-primary-foreground hover:bg-primary/90"}`} aria-label={playing ? "Tạm dừng voice" : "Phát voice"}>
+          {playing ? <Pause className="h-4 w-4 fill-current" /> : <Play className="ml-0.5 h-4 w-4 fill-current" />}
+        </button>
+        <div className="min-w-0 flex-1">
+          <div className="relative h-8">
+            <div className="absolute inset-0 flex items-center gap-1">
+              {waveBars.map((height, index) => {
+                const active = index / Math.max(1, waveBars.length - 1) * 100 <= progress
+                return (
+                  <span
+                    key={`${height}-${index}`}
+                    className={`w-1 flex-1 rounded-full transition-colors ${active ? mine ? "bg-white" : "bg-primary" : mine ? "bg-white/35" : "bg-muted-foreground/25"}`}
+                    style={{ height: `${height}%` }}
+                  />
+                )
+              })}
+            </div>
+            <input
+              type="range"
+              min="0"
+              max={duration || 0}
+              step="0.01"
+              value={Math.min(currentTime, duration || 0)}
+              onChange={seek}
+              aria-label="Tua voice"
+              className="absolute inset-0 h-8 w-full cursor-pointer opacity-0"
+            />
+          </div>
+          <div className={`mt-1 flex items-center justify-between text-[11px] font-semibold tabular-nums ${mine ? "text-primary-foreground/75" : "text-muted-foreground"}`}>
+            <span>{formatVoiceTime(currentTime)}</span>
+            <span>{formatVoiceTime(duration)}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export function MessagesPageClient({ currentUser }) {
@@ -343,11 +441,7 @@ export function MessagesPageClient({ currentUser }) {
     }
   }
 
-  const toggleRecording = async () => {
-    if (recording) {
-      mediaRecorderRef.current?.stop()
-      return
-    }
+  const startRecording = async () => {
     if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
       setError("Trình duyệt không hỗ trợ ghi âm.")
       return
@@ -362,11 +456,11 @@ export function MessagesPageClient({ currentUser }) {
       recorder.onstop = async () => {
         stream.getTracks().forEach((track) => track.stop())
         setRecording(false)
-        const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || "audio/webm" })
+        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" })
         if (blob.size < 1) return
         try {
           setSending(true)
-          const file = new File([blob], `voice-${Date.now()}.weba`, { type: blob.type || "audio/webm" })
+          const file = new File([blob], `voice-${Date.now()}.weba`, { type: "audio/webm" })
           const uploaded = await uploadMessageFile(file)
           await sendTextMessage(encodeMediaMessage("audio", uploaded.url, "Voice"), { force: true })
         } catch (caught) {
@@ -381,6 +475,14 @@ export function MessagesPageClient({ currentUser }) {
     } catch {
       setError("Không thể truy cập micro.")
     }
+  }
+
+  const toggleRecording = async () => {
+    if (recording) {
+      mediaRecorderRef.current?.stop()
+      return
+    }
+    await startRecording()
   }
 
   const sendSticker = (sticker) => sendTextMessage(encodeMediaMessage("sticker", "", sticker))
@@ -471,7 +573,7 @@ export function MessagesPageClient({ currentUser }) {
                     </div>
                   </div>
 
-                  <div className="custom-scrollbar min-h-0 flex-1 space-y-3 overflow-y-auto bg-background/45 px-3 py-4 sm:px-4">
+                  <div className="custom-scrollbar min-h-0 flex-1 space-y-2 overflow-y-auto bg-background/45 px-3 py-3 sm:px-4">
                     {loadingMessages ? (
                       <div className="flex h-full items-center justify-center text-primary">
                         <Loader2 className="h-5 w-5 animate-spin" />
@@ -486,13 +588,13 @@ export function MessagesPageClient({ currentUser }) {
                         const media = decodeMediaMessage(message.content)
                         return (
                           <div key={message.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-                            <div className={`${media?.kind === "image" ? "max-w-[min(78%,320px)] p-1.5" : "max-w-[82%] px-4 py-2.5"} rounded-2xl text-sm leading-6 shadow-sm ${mine ? "rounded-br-sm bg-primary text-primary-foreground" : "rounded-bl-sm bg-card text-foreground ring-1 ring-border/60"}`}>
+                            <div className={`${media?.kind === "image" ? "max-w-[min(68%,260px)] p-1" : media?.kind === "audio" ? "max-w-[min(68%,235px)] p-1" : media?.kind === "sticker" ? "max-w-[52%] px-2.5 py-1.5" : "max-w-[62%] px-2.5 py-1.5"} rounded-[1.25rem] text-sm leading-5 shadow-sm ${mine ? "rounded-br-md bg-primary text-primary-foreground" : "rounded-bl-md bg-card text-foreground ring-1 ring-border/60"}`}>
                               {media?.kind === "image" ? (
                                 <button type="button" onClick={() => openImageViewer(media)} className="group block overflow-hidden rounded-xl bg-background/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                                  <img src={media.url} alt={media.label || "Ảnh trong tin nhắn"} className="max-h-72 w-full rounded-xl object-contain transition duration-200 group-hover:scale-[1.015]" />
+                                  <img src={media.url} alt={media.label || "Ảnh trong tin nhắn"} className="max-h-56 w-full rounded-xl object-contain transition duration-200 group-hover:scale-[1.015]" />
                                 </button>
                               ) : media?.kind === "audio" ? (
-                                <audio src={media.url} controls className="max-w-full" />
+                                <VoiceMessagePlayer src={media.url} mine={mine} />
                               ) : media?.kind === "sticker" ? (
                                 <p className="text-4xl leading-none">{media.label}</p>
                               ) : media?.kind === "gif" ? (
@@ -591,7 +693,7 @@ export function MessagesPageClient({ currentUser }) {
                         disabled={sending}
                         maxLength={2000}
                         placeholder="Aa"
-                        className="h-10 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground focus:outline-none focus-visible:outline-none focus-visible:ring-0"
+                        className="chat-composer-input h-10 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground focus:outline-none focus-visible:outline-none focus-visible:ring-0"
                       />
                       <button type="button" onClick={() => setActivePicker((picker) => picker === "emoji" ? null : "emoji")} aria-label="Biểu cảm" className="kinetic flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-primary hover:bg-primary/10">
                         <Smile className="h-4 w-4" />

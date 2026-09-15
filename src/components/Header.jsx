@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from "framer-motion"
 import {
   BookmarkSimple,
+  ChatCenteredText,
   ChatCircle,
   Compass,
   Gear,
@@ -227,6 +228,9 @@ export function Header({ onNewPostClick }) {
                       </div>
                       <Link href={`/profile/${currentUser.username}`} onClick={() => setProfileOpen(false)} className="kinetic flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted">
                         <UserCircle size={19} weight="duotone" /> Hồ sơ
+                      </Link>
+                      <Link href="/feedback" onClick={() => setProfileOpen(false)} className="kinetic flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted">
+                        <ChatCenteredText size={19} weight="duotone" /> Góp ý
                       </Link>
                       {currentUser.role === "ADMIN" && (
                         <Link href="/admin" onClick={() => setProfileOpen(false)} className="kinetic flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium hover:bg-muted">

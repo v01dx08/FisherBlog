@@ -204,6 +204,7 @@ export function WaterConditionsPageClient() {
   }
 
   const useCurrentLocation = () => {
+    setError("")
     if (!navigator.geolocation) {
       setError("Trình duyệt không hỗ trợ lấy vị trí hiện tại.")
       return
