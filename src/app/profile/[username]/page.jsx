@@ -7,6 +7,7 @@ import { RightSidebar } from "@/components/RightSidebar"
 import { PostCard } from "@/components/FeedComponents"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
+import Link from "next/link"
 import {
   ShieldCheck,
   MapPin,
@@ -39,9 +40,6 @@ export default function ProfilePage({ params }) {
   const [currentUser, setCurrentUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
-  const [messageOpen, setMessageOpen] = useState(false)
-  const [messageText, setMessageText] = useState("")
-  const [sendingMessage, setSendingMessage] = useState(false)
   const [reportOpen, setReportOpen] = useState(false)
   const [reportReason, setReportReason] = useState("SPAM")
   const [reportDetails, setReportDetails] = useState("")
@@ -99,22 +97,6 @@ export default function ProfilePage({ params }) {
         isFollowing: data.isFollowing,
         _count: { ...current._count, followers: data.followerCount },
       }))
-    }
-  }
-
-  const sendMessage = async (event) => {
-    event.preventDefault()
-    if (!messageText.trim()) return
-    setSendingMessage(true)
-    const res = await fetch("/api/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ recipientUsername: profile.username, content: messageText }),
-    })
-    setSendingMessage(false)
-    if (res.ok) {
-      setMessageText("")
-      setMessageOpen(false)
     }
   }
 
@@ -210,8 +192,10 @@ export default function ProfilePage({ params }) {
 
                     {!isOwner && currentUser ? (
                       <div className="flex gap-2 self-start sm:self-end">
-                        <Button size="sm" variant="outline" onClick={() => setMessageOpen(true)} className="rounded-full gap-2 text-xs font-semibold">
+                        <Button asChild size="sm" variant="outline" className="rounded-full gap-2 text-xs font-semibold transition-all duration-200 hover:-translate-y-0.5 hover:bg-primary hover:text-primary-foreground hover:shadow-[0_10px_24px_hsl(var(--primary)/0.24)] active:scale-95">
+                          <Link href={`/messages?to=${encodeURIComponent(profile.username)}`}>
                           <ChatCircle size={15} weight="light" /> Nhắn tin
+                          </Link>
                         </Button>
                         <Button size="sm" variant="outline" onClick={() => setReportOpen(true)} className="rounded-full gap-2 text-xs font-semibold">
                           <Flag className="h-3.5 w-3.5" /> Báo cáo
@@ -392,21 +376,6 @@ export default function ProfilePage({ params }) {
 
         <div className="hidden min-w-0 justify-self-end lg:col-start-3 lg:block xl:col-start-5"><RightSidebar /></div>
       </div>
-
-      {messageOpen && profile && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="message-dialog-title" onKeyDown={(event) => { if (event.key === "Escape") setMessageOpen(false) }} onClick={() => setMessageOpen(false)}>
-          <form onSubmit={sendMessage} onClick={(event) => event.stopPropagation()} className="bezel w-full max-w-md">
-            <div className="bezel-core p-6">
-              <h2 id="message-dialog-title" className="text-xl font-semibold">Nhắn cho {profile.displayName || profile.username}</h2>
-              <textarea autoFocus value={messageText} onChange={(event) => setMessageText(event.target.value)} maxLength={2000} placeholder="Viết tin nhắn..." className="mt-5 min-h-32 w-full resize-none rounded-[1.25rem] bg-muted p-4 text-sm outline-none" />
-              <div className="mt-4 flex justify-end gap-2">
-                <Button type="button" variant="ghost" onClick={() => setMessageOpen(false)} className="rounded-full">Hủy</Button>
-                <Button type="submit" disabled={sendingMessage || !messageText.trim()} className="rounded-full">{sendingMessage ? "Đang gửi..." : "Gửi tin nhắn"}</Button>
-              </div>
-            </div>
-          </form>
-        </div>
-      )}
 
       {reportOpen && profile && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4 backdrop-blur-md" role="dialog" aria-modal="true" aria-labelledby="profile-report-title" onKeyDown={(event) => { if (event.key === "Escape") setReportOpen(false) }} onClick={() => setReportOpen(false)}>

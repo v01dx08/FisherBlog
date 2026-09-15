@@ -13,11 +13,10 @@ const ALLOWED_TYPES = new Map([
   ["image/gif", ".gif"],
   ["video/mp4", ".mp4"],
   ["video/webm", ".webm"],
+  ["audio/webm", ".weba"],
 ])
 
-const MIME_BY_EXTENSION = new Map(
-  [...ALLOWED_TYPES.entries()].map(([mime, extension]) => [extension, mime])
-)
+const MIME_BY_EXTENSION = new Map([...ALLOWED_TYPES.entries()].map(([mime, extension]) => [extension, mime]))
 
 export function extensionForMime(mime) {
   return ALLOWED_TYPES.get(mime) || null
@@ -32,6 +31,7 @@ export function matchesFileSignature(buffer, mime) {
   if (mime === "image/webp") return ascii.startsWith("RIFF") && ascii.slice(8, 12) === "WEBP"
   if (mime === "video/mp4") return ascii.slice(4, 8) === "ftyp"
   if (mime === "video/webm") return bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3
+  if (mime === "audio/webm") return bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3
   return false
 }
 
@@ -59,7 +59,7 @@ export function isValidCoverAsset(asset) {
 }
 
 export function safeUploadPath(filename) {
-  if (!/^[a-f0-9-]{36}\.(jpg|png|webp|gif|mp4|webm)$/.test(filename)) return null
+  if (!/^[a-f0-9-]{36}\.(jpg|png|webp|gif|mp4|webm|weba)$/.test(filename)) return null
   const resolved = path.resolve(UPLOAD_DIR, filename)
   return resolved.startsWith(`${UPLOAD_DIR}${path.sep}`) ? resolved : null
 }

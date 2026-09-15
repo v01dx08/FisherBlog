@@ -14,6 +14,42 @@ const userSelect = {
 export async function GET(request) {
   try {
     const user = await requireUser(request)
+    const url = new URL(request.url)
+    const requestedUsername = url.searchParams.get("with")
+    let requestedConversationId = null
+
+    if (requestedUsername) {
+      const recipientUsername = validateUsername(requestedUsername)
+      const recipient = await db.user.findUnique({
+        where: { usernameNormalized: recipientUsername.toLowerCase() },
+        select: { id: true, status: true },
+      })
+      if (!recipient || recipient.status !== "ACTIVE") return error("Không tìm thấy người nhận", 404)
+      if (recipient.id === user.id) return error("Không thể tự gửi tin nhắn cho chính mình", 400)
+
+      const existing = await db.conversation.findFirst({
+        where: {
+          AND: [
+            { participants: { some: { userId: user.id } } },
+            { participants: { some: { userId: recipient.id } } },
+            { participants: { every: { userId: { in: [user.id, recipient.id] } } } },
+          ],
+        },
+        select: { id: true },
+      })
+
+      if (existing) requestedConversationId = existing.id
+      else {
+        const conversation = await db.conversation.create({
+          data: {
+            participants: { create: [{ userId: user.id }, { userId: recipient.id }] },
+          },
+          select: { id: true },
+        })
+        requestedConversationId = conversation.id
+      }
+    }
+
     const conversations = await db.conversation.findMany({
       where: { participants: { some: { userId: user.id } } },
       include: {
@@ -60,7 +96,7 @@ export async function GET(request) {
         }
       })
 
-    return json(items)
+    return json({ items, selectedConversationId: requestedConversationId })
   } catch (caught) {
     return handleRouteError("messages.list", caught, request)
   }

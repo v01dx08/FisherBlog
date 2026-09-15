@@ -17,7 +17,7 @@ import {
 } from "@phosphor-icons/react"
 import Link from "next/link"
 import Image from "next/image"
-import { usePathname, useRouter } from "next/navigation"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useRef, useState } from "react"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { NotificationsDropdown } from "@/components/NotificationsDropdown"
@@ -36,12 +36,15 @@ export function Header({ onNewPostClick }) {
   const [currentUser, setCurrentUser] = useState(null)
   const [profileOpen, setProfileOpen] = useState(false)
   const [suggestionsOpen, setSuggestionsOpen] = useState(false)
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [searchKeyword, setSearchKeyword] = useState("")
   const profileRef = useRef(null)
   const searchRef = useRef(null)
+  const mobileSearchInputRef = useRef(null)
   const router = useRouter()
   const pathname = usePathname()
+  const searchParams = useSearchParams()
 
   useEffect(() => {
     let active = true
@@ -61,16 +64,25 @@ export function Header({ onNewPostClick }) {
   useEffect(() => {
     const close = (event) => {
       if (profileRef.current && !profileRef.current.contains(event.target)) setProfileOpen(false)
-      if (searchRef.current && !searchRef.current.contains(event.target)) setSuggestionsOpen(false)
+      if (searchRef.current && !searchRef.current.contains(event.target)) {
+        setSuggestionsOpen(false)
+        setMobileSearchOpen(false)
+      }
     }
     document.addEventListener("mousedown", close)
     return () => document.removeEventListener("mousedown", close)
   }, [])
 
+  useEffect(() => {
+    if (!mobileSearchOpen) return
+    mobileSearchInputRef.current?.focus()
+  }, [mobileSearchOpen])
+
   const submitSearch = (event) => {
     event.preventDefault()
     const query = searchKeyword.trim()
     setSuggestionsOpen(false)
+    setMobileSearchOpen(false)
     router.push(query ? `/?q=${encodeURIComponent(query)}` : "/")
   }
 
@@ -86,8 +98,8 @@ export function Header({ onNewPostClick }) {
     if (item.match === "explore") return pathname === "/explore"
     if (item.match === "messages") return pathname === "/messages"
     if (item.match === "water") return pathname === "/water-conditions"
-    if (item.match === "saved") return false
-    return pathname === "/"
+    if (item.match === "saved") return pathname === "/" && searchParams.get("saved") === "true"
+    return pathname === "/" && searchParams.get("saved") !== "true"
   }
 
   const initials = (currentUser?.displayName || currentUser?.username || "NK").slice(0, 2).toUpperCase()
@@ -96,15 +108,56 @@ export function Header({ onNewPostClick }) {
     <>
       <header className="app-header fixed inset-x-0 top-0 z-40 h-16">
         <div className="grid h-full w-full grid-cols-[1fr_auto] items-center gap-3 px-3 sm:px-5 md:grid-cols-[minmax(260px,1fr)_auto_minmax(260px,1fr)]">
-          <div className="flex min-w-0 items-center gap-2.5">
+          <div ref={searchRef} className="relative flex min-w-0 items-center gap-1.5 sm:gap-2.5">
             <Link href="/" aria-label="Nhật ký ngày đi câu" className="kinetic flex shrink-0 items-center gap-2 rounded-xl p-1 text-foreground hover:bg-muted">
-              <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl bg-white shadow-[0_8px_28px_rgba(34,139,230,0.24)] ring-1 ring-primary/15">
+              <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-white shadow-[0_8px_28px_rgba(34,139,230,0.24)] ring-1 ring-primary/15">
                 <Image src="/fishviet-logo-192.png" width={40} height={40} alt="" className="h-full w-full object-cover" />
               </span>
               <span className="text-sm font-extrabold tracking-[-0.035em]"></span>
             </Link>
 
-            <div ref={searchRef} className="relative hidden w-full max-w-[290px] sm:block">
+            <button
+              type="button"
+              onClick={() => {
+                setMobileSearchOpen((open) => !open)
+                setSuggestionsOpen(true)
+              }}
+              aria-label="Tìm kiếm"
+              aria-expanded={mobileSearchOpen}
+              className={`kinetic flex h-10 w-10 shrink-0 items-center justify-center rounded-full ring-1 sm:hidden ${
+                mobileSearchOpen
+                  ? "bg-primary text-primary-foreground ring-primary/40"
+                  : "bg-muted/70 text-muted-foreground ring-border/60 hover:bg-muted hover:text-foreground"
+              }`}
+            >
+              <MagnifyingGlass size={20} weight="bold" />
+            </button>
+
+            {mobileSearchOpen && (
+              <div className="fixed left-3 right-3 top-[4.35rem] z-50 sm:hidden">
+                <div className="relative">
+                  <form onSubmit={submitSearch}>
+                    <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={17} weight="bold" />
+                    <input
+                      ref={mobileSearchInputRef}
+                      type="search"
+                      value={searchKeyword}
+                      onFocus={() => setSuggestionsOpen(true)}
+                      onChange={(event) => {
+                        setSearchKeyword(event.target.value)
+                        setSuggestionsOpen(true)
+                      }}
+                      placeholder="Tìm kiếm trên Nhật ký ngày đi câu"
+                      aria-label="Tìm kiếm"
+                      className="h-11 w-full rounded-full bg-card pl-10 pr-4 text-sm outline-none ring-1 ring-border/80 placeholder:text-muted-foreground focus:ring-primary/45"
+                    />
+                  </form>
+                  <SearchSuggestions query={searchKeyword} isOpen={suggestionsOpen} onClose={() => { setSuggestionsOpen(false); setMobileSearchOpen(false) }} />
+                </div>
+              </div>
+            )}
+
+            <div className="relative hidden w-full max-w-[290px] sm:block">
               <form onSubmit={submitSearch}>
                 <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={17} weight="bold" />
                 <input
@@ -200,7 +253,7 @@ export function Header({ onNewPostClick }) {
       </header>
 
       <nav className="app-header fixed inset-x-0 bottom-0 z-40 grid h-16 grid-cols-5 px-2 md:hidden" aria-label="Điều hướng di động">
-        {navigation.slice(0, 2).map((item) => {
+        {navigation.map((item) => {
           const active = isActive(item)
           return (
             <Link key={item.href} href={item.href} className={`flex flex-col items-center justify-center gap-1 text-[10px] font-semibold ${active ? "text-primary" : "text-muted-foreground"}`}>
@@ -208,29 +261,6 @@ export function Header({ onNewPostClick }) {
             </Link>
           )
         })}
-        {onNewPostClick ? (
-          <button type="button" onClick={onNewPostClick} className="flex flex-col items-center justify-center gap-1 text-[10px] font-semibold text-primary">
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground"><Plus size={18} weight="bold" /></span>
-            Viết bài
-          </button>
-        ) : (
-          <Link href="/" className="flex flex-col items-center justify-center gap-1 text-[10px] font-semibold text-primary">
-            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground"><Plus size={18} weight="bold" /></span>
-            Viết bài
-          </Link>
-        )}
-        {currentUser ? (
-          <Link href="/messages" className={`flex flex-col items-center justify-center gap-1 text-[10px] font-semibold ${isActive(navigation[3]) ? "text-primary" : "text-muted-foreground"}`}>
-            <ChatCircle size={22} weight={isActive(navigation[3]) ? "fill" : "regular"} /> Tin nhắn
-          </Link>
-        ) : (
-          <Link href="/login" className="flex flex-col items-center justify-center gap-1 text-[10px] font-semibold text-muted-foreground">
-            <SignIn size={22} weight="regular" /> Tin nhắn
-          </Link>
-        )}
-        <Link href="/?saved=true" className={`flex flex-col items-center justify-center gap-1 text-[10px] font-semibold ${isActive(navigation[2]) ? "text-primary" : "text-muted-foreground"}`}>
-          <BookmarkSimple size={22} weight={isActive(navigation[2]) ? "fill" : "regular"} /> Đã lưu
-        </Link>
       </nav>
 
       <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />

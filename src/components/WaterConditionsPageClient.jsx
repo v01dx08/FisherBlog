@@ -144,6 +144,9 @@ export function WaterConditionsPageClient() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [locating, setLocating] = useState(false)
+  const [fishingSpots, setFishingSpots] = useState([])
+  const [loadingFishingSpots, setLoadingFishingSpots] = useState(false)
+  const [fishingSpotsError, setFishingSpotsError] = useState("")
 
   const loadReport = useCallback(async (params) => {
     setLoading(true)
@@ -162,11 +165,32 @@ export function WaterConditionsPageClient() {
     }
   }, [])
 
+  const loadFishingSpots = useCallback(async (params) => {
+    setLoadingFishingSpots(true)
+    setFishingSpotsError("")
+    try {
+      const spotParams = new URLSearchParams(params)
+      if (!spotParams.has("radius")) spotParams.set("radius", "35000")
+      const response = await fetch(`/api/fishing-spots?${spotParams.toString()}`)
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || "Không thể tải danh sách hồ câu.")
+      setFishingSpots(Array.isArray(data.items) ? data.items : [])
+    } catch (caught) {
+      setFishingSpots([])
+      setFishingSpotsError(caught.message || "Không thể tải danh sách hồ câu.")
+    } finally {
+      setLoadingFishingSpots(false)
+    }
+  }, [])
+
   useEffect(() => {
     const params = new URLSearchParams({ q: submittedQuery })
-    const timer = window.setTimeout(() => loadReport(params), 0)
+    const timer = window.setTimeout(() => {
+      loadReport(params)
+      loadFishingSpots(params)
+    }, 0)
     return () => window.clearTimeout(timer)
-  }, [loadReport, submittedQuery])
+  }, [loadFishingSpots, loadReport, submittedQuery])
 
   const submitSearch = (event) => {
     event.preventDefault()
@@ -193,7 +217,7 @@ export function WaterConditionsPageClient() {
           name: "Vị trí quanh tôi",
         })
         setQuery("Vị trí quanh tôi")
-        loadReport(params).finally(() => setLocating(false))
+        Promise.allSettled([loadReport(params), loadFishingSpots(params)]).finally(() => setLocating(false))
       },
       () => {
         setLocating(false)
@@ -213,6 +237,20 @@ export function WaterConditionsPageClient() {
       name: place.name,
     })
     loadReport(params)
+    loadFishingSpots(params)
+  }
+
+  const selectFishingSpot = (spot) => {
+    const label = [spot.name, spot.admin1].filter(Boolean).join(", ")
+    setError("")
+    setQuery(label)
+    const params = new URLSearchParams({
+      lat: String(spot.latitude),
+      lon: String(spot.longitude),
+      name: spot.name,
+    })
+    loadReport(params)
+    loadFishingSpots(params)
   }
 
   return (
@@ -266,6 +304,48 @@ export function WaterConditionsPageClient() {
                   {spot}
                 </button>
               ))}
+            </div>
+
+            <div className="mt-5 border-t border-border/60 pt-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="text-sm font-bold">Hồ câu gợi ý quanh khu vực</h2>
+                  <p className="mt-1 text-xs text-muted-foreground">Dữ liệu từ OpenStreetMap và danh sách FishViet.</p>
+                </div>
+                {loadingFishingSpots && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />}
+              </div>
+              {fishingSpotsError ? (
+                <p className="rounded-xl bg-destructive/10 px-3 py-2 text-xs text-destructive">{fishingSpotsError}</p>
+              ) : fishingSpots.length > 0 ? (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {fishingSpots.slice(0, 6).map((spot) => (
+                    <button
+                      key={spot.id}
+                      type="button"
+                      onClick={() => selectFishingSpot(spot)}
+                      className="kinetic rounded-2xl bg-muted/45 px-4 py-3 text-left hover:bg-muted"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-bold">{spot.name}</p>
+                          <p className="mt-1 truncate text-xs text-muted-foreground">
+                            {[spot.admin2, spot.admin1].filter(Boolean).join(", ") || spot.source}
+                          </p>
+                        </div>
+                        {typeof spot.distanceKm === "number" && (
+                          <span className="shrink-0 rounded-full bg-primary/12 px-2 py-1 text-[10px] font-bold text-primary">
+                            {spot.distanceKm} km
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="rounded-xl bg-muted/45 px-3 py-2 text-xs text-muted-foreground">
+                  Chưa có hồ câu gợi ý cho khu vực này. Hãy thử tìm tên tỉnh/huyện hoặc dùng Gần tôi.
+                </p>
+              )}
             </div>
           </section>
 

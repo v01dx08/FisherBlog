@@ -28,7 +28,16 @@ export async function GET(request, { params }) {
     ])
     if (!asset) return error("Không tìm thấy tệp", 404)
     const isPublic = asset.post?.visibility === "PUBLIC" || Boolean(profileImageOwner)
-    const canRead = isPublic || user?.id === asset.ownerId || user?.role === "ADMIN"
+    const messageAssetOwner = !isPublic && user
+      ? await db.message.findFirst({
+          where: {
+            content: { contains: avatarPath },
+            conversation: { participants: { some: { userId: user.id } } },
+          },
+          select: { id: true },
+        })
+      : null
+    const canRead = isPublic || user?.id === asset.ownerId || user?.role === "ADMIN" || Boolean(messageAssetOwner)
     if (!canRead) return error("Không tìm thấy tệp", 404)
 
     const file = await stat(filePath)
