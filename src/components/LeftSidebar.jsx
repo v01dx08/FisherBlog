@@ -2,13 +2,12 @@
 
 import {
   BookmarkSimple,
-  ChatCenteredText,
   Compass,
   Fish,
   Gear,
   Hash,
   House,
-  Scales,
+  MapTrifold,
   ShieldCheck,
   TrendUp,
   UserCircle,
@@ -48,11 +47,10 @@ export function LeftSidebar() {
   const navItems = [
     { name: "Bảng tin", icon: House, href: "/", active: pathname === "/" },
     { name: "Khám phá", icon: Compass, href: "/explore", active: pathname === "/explore" },
+    { name: "Hồ câu quanh tôi", icon: MapTrifold, href: "/spots", active: pathname === "/spots" },
     { name: "Nhật ký đã lưu", icon: BookmarkSimple, href: "/?saved=true", active: false },
     ...(currentUser?.role === "ADMIN" ? [{ name: "Quản trị", icon: ShieldCheck, href: "/admin", active: pathname === "/admin" }] : []),
     { name: "Điều kiện mặt nước", icon: Waves, href: "/water-conditions", active: pathname === "/water-conditions" },
-    { name: "Góp ý cải thiện", icon: ChatCenteredText, href: "/feedback", active: pathname === "/feedback" },
-    { name: "Pháp lý & bản quyền", icon: Scales, href: "/legal", active: pathname === "/legal" },
   ]
 
   const initials = (currentUser?.displayName || currentUser?.username || "NK").slice(0, 2).toUpperCase()
@@ -114,7 +112,6 @@ export function LeftSidebar() {
 
         <div className="mt-auto px-3 pt-6 text-[11px] leading-5 text-muted-foreground/75">
           <div className="mb-2 flex items-center gap-2 font-semibold text-foreground/65"><Fish size={14} weight="duotone" /> FishViet.vn 2026</div>
-          <div className="flex flex-wrap gap-x-3"><Link href="/legal" className="hover:underline">Điều khoản</Link><Link href="/legal" className="hover:underline">Riêng tư</Link></div>
         </div>
       </aside>
       <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />

@@ -55,7 +55,7 @@ export function FeedPageClient({ initialPosts, initialCursor, initialUser, tag, 
       <Header onNewPostClick={() => setComposeOpen(true)} />
       <div className="grid h-full w-full grid-cols-1 gap-5 overflow-hidden px-3 pb-[76px] pt-[76px] sm:px-5 md:pb-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,680px)_minmax(320px,1fr)] xl:grid-cols-[280px_minmax(24px,1fr)_minmax(0,680px)_minmax(24px,1fr)_320px] xl:gap-6 min-[2100px]:mx-auto min-[2100px]:max-w-[1480px]">
         <div className="hidden min-w-0 xl:col-start-1 xl:block"><LeftSidebar /></div>
-        <section className="custom-scrollbar min-h-0 min-w-0 overflow-y-auto pb-8 lg:col-start-2 xl:col-start-3">
+        <section className="scrollbar-none min-h-0 min-w-0 overflow-y-auto pb-8 lg:col-start-2 xl:col-start-3">
           <div className="mb-4 flex items-center justify-between px-1">
             <div>
               <h1 className="text-xl font-bold tracking-[-0.025em] sm:text-2xl">{filter ? filter.text : "Bảng tin cộng đồng"}</h1>

@@ -14,6 +14,7 @@ const ALLOWED_TYPES = new Map([
   ["video/mp4", ".mp4"],
   ["video/webm", ".webm"],
   ["audio/webm", ".weba"],
+  ["audio/mp4", ".m4a"],
 ])
 
 const MIME_BY_EXTENSION = new Map([...ALLOWED_TYPES.entries()].map(([mime, extension]) => [extension, mime]))
@@ -37,6 +38,7 @@ export function matchesFileSignature(buffer, mime) {
   if (normalizedMime === "video/mp4") return ascii.slice(4, 8) === "ftyp"
   if (normalizedMime === "video/webm") return bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3
   if (normalizedMime === "audio/webm") return bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3
+  if (normalizedMime === "audio/mp4") return ascii.slice(4, 8) === "ftyp"
   return false
 }
 
@@ -64,7 +66,7 @@ export function isValidCoverAsset(asset) {
 }
 
 export function safeUploadPath(filename) {
-  if (!/^[a-f0-9-]{36}\.(jpg|png|webp|gif|mp4|webm|weba)$/.test(filename)) return null
+  if (!/^[a-f0-9-]{36}\.(jpg|png|webp|gif|mp4|webm|weba|m4a)$/.test(filename)) return null
   const resolved = path.resolve(UPLOAD_DIR, filename)
   return resolved.startsWith(`${UPLOAD_DIR}${path.sep}`) ? resolved : null
 }

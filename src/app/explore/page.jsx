@@ -115,6 +115,10 @@ export default function ExplorePage() {
 
   const useNearbySpots = () => {
     setFishingSpotsError("")
+    if (typeof window !== "undefined" && !window.isSecureContext) {
+      setFishingSpotsError("Mobile chỉ cho phép lấy vị trí trên HTTPS. Hãy mở web bằng HTTPS rồi thử lại.")
+      return
+    }
     if (!navigator.geolocation) {
       setFishingSpotsError("Trình duyệt không hỗ trợ lấy vị trí.")
       return
@@ -131,7 +135,7 @@ export default function ExplorePage() {
         setLoadingFishingSpots(false)
         setFishingSpotsError("Không thể lấy vị trí. Hãy cho phép quyền vị trí rồi thử lại.")
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 60_000 }
     )
   }
 
