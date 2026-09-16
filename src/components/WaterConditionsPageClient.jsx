@@ -205,6 +205,10 @@ export function WaterConditionsPageClient() {
 
   const useCurrentLocation = () => {
     setError("")
+    if (typeof window !== "undefined" && !window.isSecureContext) {
+      setError("Mobile chỉ cho phép lấy vị trí trên HTTPS. Hãy mở web bằng HTTPS hoặc nhập tên địa điểm.")
+      return
+    }
     if (!navigator.geolocation) {
       setError("Trình duyệt không hỗ trợ lấy vị trí hiện tại.")
       return
@@ -224,7 +228,7 @@ export function WaterConditionsPageClient() {
         setLocating(false)
         setError("Không thể lấy vị trí. Hãy cho phép quyền vị trí hoặc nhập tên địa điểm.")
       },
-      { enableHighAccuracy: true, timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 20000, maximumAge: 60_000 }
     )
   }
 

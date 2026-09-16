@@ -80,6 +80,8 @@ model User {
 
   sentMessages      Message[]
   conversationLinks ConversationParticipant[]
+  callSessionsStarted CallSession[]           @relation("callCaller")
+  callSignalsSent     CallSignal[]            @relation("callSignalSender")
   auditLogs         AuditLog[]                @relation("auditActor")
   mediaAssets       MediaAsset[]
   feedbackItems     Feedback[]
@@ -185,6 +187,7 @@ model Conversation {
   id           String                    @id @default(uuid())
   participants ConversationParticipant[]
   messages     Message[]
+  callSessions CallSession[]
   updatedAt    DateTime                  @default(now())
   createdAt    DateTime                  @default(now())
 
@@ -213,6 +216,37 @@ model Message {
   createdAt      DateTime     @default(now())
 
   @@index([conversationId, createdAt])
+  @@index([senderId, createdAt])
+}
+
+model CallSession {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  callerId       String
+  caller         User         @relation("callCaller", fields: [callerId], references: [id], onDelete: Cascade)
+  mode           String
+  status         String       @default("ringing")
+  signals        CallSignal[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  endedAt        DateTime?
+
+  @@index([conversationId, status, createdAt])
+  @@index([callerId, createdAt])
+}
+
+model CallSignal {
+  id        String      @id @default(uuid())
+  sessionId String
+  session   CallSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  senderId  String
+  sender    User        @relation("callSignalSender", fields: [senderId], references: [id], onDelete: Cascade)
+  type      String
+  payload   Json
+  createdAt DateTime    @default(now())
+
+  @@index([sessionId, createdAt])
   @@index([senderId, createdAt])
 }
 

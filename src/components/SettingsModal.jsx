@@ -1,8 +1,9 @@
 "use client"
 
 import { AnimatePresence, motion } from "framer-motion"
-import { Bell, Check, DownloadSimple, EyeSlash, Lock, Moon, Sun, UserCircle, X } from "@phosphor-icons/react"
+import { Bell, ChatCenteredText, Check, DownloadSimple, EyeSlash, Lock, Moon, Scales, Sun, UserCircle, X } from "@phosphor-icons/react"
 import { useEffect, useRef, useState } from "react"
+import Link from "next/link"
 import { useTheme } from "@/components/ThemeProvider"
 import { OnboardingModal } from "@/components/OnboardingModal"
 
@@ -139,6 +140,14 @@ export function SettingsModal({ isOpen, onClose }) {
                 <span className="flex items-center gap-3">{theme === "dark" ? <Moon size={19} weight="light" className="text-primary" /> : <Sun size={19} weight="light" className="text-primary" />}<span><span className="block text-sm font-semibold">Giao diện</span><span className="mt-1 block text-xs text-muted-foreground">{theme === "dark" ? "Tối" : "Sáng"}</span></span></span>
                 <span className="text-xs font-semibold text-primary">Đổi</span>
               </button>
+              <Link href="/feedback" onClick={onClose} className="kinetic flex w-full items-center justify-between rounded-[1.5rem] bg-muted/55 p-4 text-left active:scale-[0.99]">
+                <span className="flex items-center gap-3"><ChatCenteredText size={19} weight="light" className="text-primary" /><span><span className="block text-sm font-semibold">Góp ý cải thiện</span><span className="mt-1 block text-xs text-muted-foreground">Gửi lỗi, ý tưởng hoặc điều cần nâng cấp.</span></span></span>
+                <span className="text-xs font-semibold text-primary">Mở</span>
+              </Link>
+              <Link href="/legal" onClick={onClose} className="kinetic flex w-full items-center justify-between rounded-[1.5rem] bg-muted/55 p-4 text-left active:scale-[0.99]">
+                <span className="flex items-center gap-3"><Scales size={19} weight="light" className="text-primary" /><span><span className="block text-sm font-semibold">Pháp lý & bản quyền</span><span className="mt-1 block text-xs text-muted-foreground">Điều khoản, riêng tư và bảo vệ nội dung.</span></span></span>
+                <span className="text-xs font-semibold text-primary">Mở</span>
+              </Link>
             </div>
 
             <div className="mt-8 border-t border-border/60 pt-7">

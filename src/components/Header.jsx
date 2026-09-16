@@ -8,8 +8,8 @@ import {
   Compass,
   Gear,
   House,
+  MapTrifold,
   MagnifyingGlass,
-  Plus,
   ShieldCheck,
   SignIn,
   SignOut,
@@ -28,12 +28,13 @@ import { SettingsModal } from "@/components/SettingsModal"
 const navigation = [
   { label: "Bảng tin", href: "/", icon: House, match: "home" },
   { label: "Khám phá", href: "/explore", icon: Compass, match: "explore" },
+  { label: "Hồ câu", href: "/spots", icon: MapTrifold, match: "spots" },
   { label: "Đã lưu", href: "/?saved=true", icon: BookmarkSimple, match: "saved" },
   { label: "Tin nhắn", href: "/messages", icon: ChatCircle, match: "messages" },
   { label: "Điều kiện mặt nước", href: "/water-conditions", icon: Waves, match: "water" },
 ]
 
-export function Header({ onNewPostClick }) {
+export function Header({ hideMobileNav = false }) {
   const [currentUser, setCurrentUser] = useState(null)
   const [profileOpen, setProfileOpen] = useState(false)
   const [suggestionsOpen, setSuggestionsOpen] = useState(false)
@@ -97,6 +98,7 @@ export function Header({ onNewPostClick }) {
 
   const isActive = (item) => {
     if (item.match === "explore") return pathname === "/explore"
+    if (item.match === "spots") return pathname === "/spots"
     if (item.match === "messages") return pathname === "/messages"
     if (item.match === "water") return pathname === "/water-conditions"
     if (item.match === "saved") return pathname === "/" && searchParams.get("saved") === "true"
@@ -187,7 +189,7 @@ export function Header({ onNewPostClick }) {
                   href={item.href}
                   aria-label={item.label}
                   title={item.label}
-                  className={`kinetic relative flex w-24 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted/75 hover:text-foreground lg:w-28 ${active ? "text-primary" : ""}`}
+                  className={`kinetic relative flex w-20 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted/75 hover:text-foreground lg:w-24 ${active ? "text-primary" : ""}`}
                 >
                   <item.icon size={25} weight={active ? "fill" : "regular"} />
                   {active && <span className="absolute inset-x-2 bottom-0 h-[3px] rounded-t-full bg-primary" />}
@@ -197,12 +199,6 @@ export function Header({ onNewPostClick }) {
           </nav>
 
           <div className="ml-auto flex items-center justify-end gap-1">
-            {currentUser && onNewPostClick && (
-              <button type="button" onClick={onNewPostClick} className="kinetic hidden h-10 items-center gap-2 rounded-lg bg-primary px-4 text-xs font-bold text-primary-foreground shadow-[0_8px_26px_rgba(34,139,230,0.2)] hover:bg-primary/90 active:scale-[0.98] lg:flex">
-                <Plus size={16} weight="bold" /> Viết bài
-              </button>
-            )}
-
             {currentUser && <NotificationsDropdown />}
             {currentUser ? (
               <div ref={profileRef} className="relative">
@@ -256,16 +252,18 @@ export function Header({ onNewPostClick }) {
         </div>
       </header>
 
-      <nav className="app-header fixed inset-x-0 bottom-0 z-40 grid h-16 grid-cols-5 px-2 md:hidden" aria-label="Điều hướng di động">
-        {navigation.map((item) => {
-          const active = isActive(item)
-          return (
-            <Link key={item.href} href={item.href} className={`flex flex-col items-center justify-center gap-1 text-[10px] font-semibold ${active ? "text-primary" : "text-muted-foreground"}`}>
-              <item.icon size={22} weight={active ? "fill" : "regular"} /> {item.label}
-            </Link>
-          )
-        })}
-      </nav>
+      {!hideMobileNav && (
+        <nav className="app-header fixed inset-x-0 bottom-0 z-40 grid h-16 grid-cols-6 px-1 md:hidden" aria-label="Điều hướng di động">
+          {navigation.map((item) => {
+            const active = isActive(item)
+            return (
+              <Link key={item.href} href={item.href} className={`flex flex-col items-center justify-center gap-1 text-[10px] font-semibold ${active ? "text-primary" : "text-muted-foreground"}`}>
+                <item.icon size={22} weight={active ? "fill" : "regular"} /> {item.label}
+              </Link>
+            )
+          })}
+        </nav>
+      )}
 
       <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </>

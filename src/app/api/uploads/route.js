@@ -38,7 +38,7 @@ export async function POST(request) {
 
     const normalizedMime = String(file.type || "").split(";")[0].trim().toLowerCase()
     const extension = extensionForMime(normalizedMime)
-    if (!extension) throw new RequestError("Chỉ hỗ trợ JPG, PNG, WebP, GIF, MP4, WebM hoặc voice WebM", 415)
+    if (!extension) throw new RequestError("Chỉ hỗ trợ JPG, PNG, WebP, GIF, MP4, WebM hoặc voice WebM/M4A", 415)
     const buffer = Buffer.from(await file.arrayBuffer())
     if (!matchesFileSignature(buffer, normalizedMime)) {
       throw new RequestError("Nội dung tệp không khớp định dạng khai báo", 415)

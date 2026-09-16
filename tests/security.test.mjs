@@ -46,6 +46,7 @@ test("upload signatures must match declared MIME", () => {
   assert.equal(matchesFileSignature(png, "image/png"), true)
   assert.equal(matchesFileSignature(Buffer.from("<html>bad</html>"), "image/png"), false)
   assert.equal(matchesFileSignature(Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0x01]), "audio/webm;codecs=opus"), true)
+  assert.equal(matchesFileSignature(Buffer.from([0x00, 0x00, 0x00, 0x20, 0x66, 0x74, 0x79, 0x70, 0x4d, 0x34, 0x41, 0x20]), "audio/mp4"), true)
 })
 
 test("avatar uploads stay image-only, same-origin and size-limited", () => {

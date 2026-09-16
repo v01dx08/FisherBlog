@@ -5,7 +5,6 @@ import {
   BookmarkSimple,
   Certificate,
   ChatCircle,
-  DotsThree,
   Fish,
   Flag,
   GlobeHemisphereWest,
@@ -402,6 +401,7 @@ export function PostCard({
     if (!currentUser) return router.push("/login")
     const previous = bookmarked
     setBookmarked(!bookmarked)
+    setMenuOpen(false)
     setActionError("")
     try {
       const response = await fetch(`/api/posts/${postId}/bookmark`, { method: "POST" })
@@ -526,29 +526,25 @@ export function PostCard({
             </div>
           </Link>
           <div className="relative flex items-center">
-            <button type="button" onClick={toggleBookmark} aria-label={bookmarked ? "Bỏ lưu" : "Lưu bài viết"} className={`kinetic flex h-9 w-9 items-center justify-center rounded-full hover:bg-muted ${bookmarked ? "text-primary" : "text-muted-foreground"}`}>
+            <button type="button" onClick={() => { setMenuOpen((open) => !open); setDeleteArmed(false) }} aria-label="Tùy chọn bài viết" aria-expanded={menuOpen} className={`kinetic flex h-9 w-9 items-center justify-center rounded-full hover:bg-muted ${bookmarked ? "text-primary" : "text-muted-foreground"}`}>
               <BookmarkSimple size={18} weight={bookmarked ? "fill" : "light"} />
             </button>
-            {(canDelete || canReportPost) && (
-              <>
-                <button type="button" onClick={() => { setMenuOpen((open) => !open); setDeleteArmed(false) }} aria-label="Tùy chọn bài viết" aria-expanded={menuOpen} className="kinetic flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted">
-                  <DotsThree size={20} weight="bold" />
+            {menuOpen && (
+              <div className="absolute right-0 top-11 z-10 w-48 overflow-hidden rounded-2xl bg-popover p-1 text-xs font-semibold ring-1 ring-foreground/10 shadow-xl">
+                <button type="button" onClick={toggleBookmark} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-muted-foreground hover:bg-muted hover:text-foreground">
+                  <BookmarkSimple size={16} weight={bookmarked ? "fill" : "light"} /> {bookmarked ? "Bỏ lưu bài viết" : "Lưu bài viết"}
                 </button>
-                {menuOpen && (
-                  <div className="absolute right-0 top-11 z-10 w-44 overflow-hidden rounded-2xl bg-popover p-1 text-xs font-semibold ring-1 ring-foreground/10 shadow-xl">
-                    {canReportPost && (
-                      <button type="button" onClick={() => openReport({ type: "POST", id: postId, label: "bài viết này" })} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-muted-foreground hover:bg-muted hover:text-foreground">
-                        <Flag size={16} weight="light" /> Báo cáo bài viết
-                      </button>
-                    )}
-                    {canDelete && (
-                      <button type="button" onClick={remove} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-destructive hover:bg-destructive/10">
-                        <Trash size={16} weight="light" /> {deleteArmed ? "Xác nhận xóa" : "Xóa nhật ký"}
-                      </button>
-                    )}
-                  </div>
+                {canReportPost && (
+                  <button type="button" onClick={() => openReport({ type: "POST", id: postId, label: "bài viết này" })} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-muted-foreground hover:bg-muted hover:text-foreground">
+                    <Flag size={16} weight="light" /> Báo cáo bài viết
+                  </button>
                 )}
-              </>
+                {canDelete && (
+                  <button type="button" onClick={remove} className="flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-destructive hover:bg-destructive/10">
+                    <Trash size={16} weight="light" /> {deleteArmed ? "Xác nhận xóa" : "Xóa nhật ký"}
+                  </button>
+                )}
+              </div>
             )}
           </div>
         </header>
