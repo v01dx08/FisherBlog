@@ -58,6 +58,26 @@ export function Header({ hideMobileNav = false }) {
   }, [])
 
   useEffect(() => {
+    if (!currentUser?.id || typeof document === "undefined") return undefined
+
+    const touchPresence = () => {
+      if (document.visibilityState === "hidden") return
+      fetch("/api/presence", { method: "POST", keepalive: true }).catch(() => {})
+    }
+
+    touchPresence()
+    const timer = window.setInterval(touchPresence, 30_000)
+    window.addEventListener("focus", touchPresence)
+    document.addEventListener("visibilitychange", touchPresence)
+
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener("focus", touchPresence)
+      document.removeEventListener("visibilitychange", touchPresence)
+    }
+  }, [currentUser?.id])
+
+  useEffect(() => {
     const updateProfile = (event) => setCurrentUser((user) => user ? { ...user, ...event.detail } : user)
     window.addEventListener("profile-updated", updateProfile)
     return () => window.removeEventListener("profile-updated", updateProfile)

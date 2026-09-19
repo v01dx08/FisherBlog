@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/auth"
 import { error, handleRouteError, json, readJson } from "@/lib/http"
 import { assertSameOrigin, cleanText, validateUsername } from "@/lib/security"
 import { enforceRateLimit } from "@/lib/rate-limit"
+import { decorateUserPresence } from "@/lib/user-presence"
 
 const userSelect = {
   id: true,
@@ -81,9 +82,10 @@ export async function GET(request) {
     const items = conversations.map((conversation) => {
         const otherUser = conversation.participants.find((item) => item.userId !== user.id)?.user
         const lastMessage = conversation.messages[0]
+        const decoratedOtherUser = decorateUserPresence(otherUser)
         return {
           id: conversation.id,
-          otherUser: otherUser || { username: "unknown", displayName: "Không rõ" },
+          otherUser: decoratedOtherUser || { username: "unknown", displayName: "Không rõ" },
           lastMessage: lastMessage
             ? {
                 content: lastMessage.content,
@@ -108,7 +110,7 @@ export async function POST(request) {
     const user = await requireUser(request)
     await enforceRateLimit(request, { scope: "messages.send", actorId: user.id, limit: 120, windowMs: 10 * 60 * 1000 })
     const body = await readJson(request, 8_192)
-    const content = cleanText(body.content, { name: "Tin nhắn", min: 1, max: 2_000 })
+    const content = cleanText(body.content, { name: "Tin nhắn", min: 1, max: 4_000 })
     let conversationId = body.conversationId ? String(body.conversationId) : null
 
     if (conversationId) {
