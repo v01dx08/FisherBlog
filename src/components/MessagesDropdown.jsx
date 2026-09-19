@@ -19,6 +19,12 @@ function formatTimeAgo(dateString) {
   return date.toLocaleDateString("vi-VN")
 }
 
+function getItems(data) {
+  if (Array.isArray(data)) return data
+  if (Array.isArray(data?.items)) return data.items
+  return []
+}
+
 export function MessagesDropdown() {
   const [isOpen, setIsOpen] = useState(false)
   const [conversations, setConversations] = useState([])
@@ -49,7 +55,7 @@ export function MessagesDropdown() {
     try {
       const res = await fetch("/api/messages")
       const data = await res.json()
-      if (Array.isArray(data)) setConversations(data)
+      setConversations(getItems(data))
     } catch {
       // silent
     } finally {
@@ -61,7 +67,7 @@ export function MessagesDropdown() {
     try {
       const res = await fetch(`/api/messages/${convId}`)
       const data = await res.json()
-      if (Array.isArray(data)) setMessages(data)
+      setMessages(getItems(data))
     } catch {
       // silent
     }

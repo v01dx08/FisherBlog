@@ -1,0 +1,446 @@
+"use client"
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import {
+  ArrowLeft,
+  Camera,
+  CameraOff,
+  Loader2,
+  Mic,
+  MicOff,
+  MoreHorizontal,
+  PhoneCall,
+  PhoneOff,
+  Plus,
+  Volume2,
+  VolumeX,
+  X,
+} from "lucide-react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+
+function stopMediaStream(stream) {
+  stream?.getTracks().forEach((track) => track.stop())
+}
+
+function formatCallTime(seconds) {
+  const minutes = Math.floor(seconds / 60)
+  const rest = Math.floor(seconds % 60).toString().padStart(2, "0")
+  return `${minutes}:${rest}`
+}
+
+export function MessagesCallPageClient({ currentUser }) {
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const conversationId = searchParams.get("conversationId") || ""
+  const requestedCallId = searchParams.get("callId") || ""
+  const requestedMode = searchParams.get("mode") === "video" ? "video" : "audio"
+  const restartToken = searchParams.get("restart") || ""
+  const incoming = searchParams.get("incoming") === "1"
+
+  const [conversation, setConversation] = useState(null)
+  const [callId, setCallId] = useState(requestedCallId)
+  const [mode, setMode] = useState(requestedMode)
+  const [status, setStatus] = useState(incoming ? "Đang kết nối..." : "Đang đổ chuông...")
+  const [error, setError] = useState("")
+  const [localStream, setLocalStream] = useState(null)
+  const [remoteStream, setRemoteStream] = useState(null)
+  const [micEnabled, setMicEnabled] = useState(true)
+  const [speakerEnabled, setSpeakerEnabled] = useState(true)
+  const [cameraEnabled, setCameraEnabled] = useState(requestedMode === "video")
+  const [seconds, setSeconds] = useState(0)
+  const [ending, setEnding] = useState(false)
+  const [booting, setBooting] = useState(true)
+  const [callEnded, setCallEnded] = useState(false)
+
+  const peerRef = useRef(null)
+  const localVideoRef = useRef(null)
+  const remoteVideoRef = useRef(null)
+  const remoteAudioRef = useRef(null)
+  const handledSignalIdsRef = useRef(new Set())
+  const callIdRef = useRef(callId)
+  const endedRef = useRef(false)
+
+  const otherUser = conversation?.otherUser || {}
+  const displayName = otherUser.displayName || otherUser.username || "Cuộc gọi"
+  const initials = displayName.slice(0, 2).toUpperCase()
+  const isVideo = mode === "video"
+
+  const closeCall = useCallback(() => {
+    if (typeof window !== "undefined" && window.opener) {
+      window.close()
+      window.setTimeout(() => {
+        router.push(conversationId ? `/messages?conversationId=${encodeURIComponent(conversationId)}` : "/messages")
+      }, 120)
+      return
+    }
+    router.push(conversationId ? `/messages?conversationId=${encodeURIComponent(conversationId)}` : "/messages")
+  }, [conversationId, router])
+
+  const recall = useCallback(() => {
+    const url = `/messages/call?conversationId=${encodeURIComponent(conversationId)}&mode=${encodeURIComponent(mode)}&restart=${Date.now()}`
+    router.push(url)
+  }, [conversationId, mode, router])
+
+  useEffect(() => {
+    callIdRef.current = callId
+  }, [callId])
+
+  useEffect(() => {
+    let active = true
+    fetch("/api/messages")
+      .then((response) => response.json())
+      .then((data) => {
+        if (!active) return
+        const items = Array.isArray(data?.items) ? data.items : []
+        setConversation(items.find((item) => item.id === conversationId) || null)
+      })
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [conversationId])
+
+  useEffect(() => {
+    if (localVideoRef.current) localVideoRef.current.srcObject = localStream
+  }, [localStream])
+
+  useEffect(() => {
+    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = remoteStream
+    if (remoteAudioRef.current) remoteAudioRef.current.srcObject = remoteStream
+  }, [remoteStream])
+
+  useEffect(() => {
+    if (remoteAudioRef.current) remoteAudioRef.current.muted = !speakerEnabled
+    if (remoteVideoRef.current) remoteVideoRef.current.muted = !speakerEnabled
+  }, [speakerEnabled, remoteStream])
+
+  useEffect(() => {
+    if (callEnded) return undefined
+    const timer = window.setInterval(() => setSeconds((value) => value + 1), 1000)
+    return () => window.clearInterval(timer)
+  }, [callEnded])
+
+  const postSignal = useCallback(async (targetCallId, type, payload) => {
+    await fetch(`/api/messages/calls/${targetCallId}/signals`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type, payload }),
+    })
+  }, [])
+
+  const endCall = useCallback(async ({ notify = true } = {}) => {
+    if (endedRef.current) return
+    endedRef.current = true
+    setEnding(true)
+    const activeCallId = callIdRef.current
+    if (notify && activeCallId) {
+      fetch(`/api/messages/calls/${activeCallId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "end" }),
+      }).catch(() => {})
+    }
+    peerRef.current?.close()
+    peerRef.current = null
+    stopMediaStream(localStream)
+    stopMediaStream(remoteStream)
+    setLocalStream(null)
+    setRemoteStream(null)
+    setCallId("")
+    setStatus("Cuộc gọi đã kết thúc")
+    setBooting(false)
+    setEnding(false)
+    setCallEnded(true)
+  }, [localStream, remoteStream])
+
+  const createPeer = useCallback((targetCallId, stream) => {
+    const peer = new RTCPeerConnection({
+      iceServers: [{ urls: ["stun:stun.l.google.com:19302", "stun:global.stun.twilio.com:3478"] }],
+    })
+    stream.getTracks().forEach((track) => peer.addTrack(track, stream))
+    peer.onicecandidate = (event) => {
+      if (event.candidate) postSignal(targetCallId, "candidate", event.candidate.toJSON()).catch(() => {})
+    }
+    peer.ontrack = (event) => {
+      setRemoteStream(event.streams[0])
+      setStatus("Đã kết nối")
+    }
+    peer.onconnectionstatechange = () => {
+      if (["failed", "disconnected"].includes(peer.connectionState)) setStatus("Đang thử kết nối lại...")
+      if (peer.connectionState === "connected") setStatus("Đã kết nối")
+      if (peer.connectionState === "closed") setStatus("Cuộc gọi đã kết thúc")
+    }
+    peerRef.current = peer
+    return peer
+  }, [postSignal])
+
+  const handleSignal = useCallback(async (signal) => {
+    if (!signal?.id || handledSignalIdsRef.current.has(signal.id)) return
+    handledSignalIdsRef.current.add(signal.id)
+    if (signal.type === "accepted") {
+      setStatus("Đã nhận cuộc gọi")
+      return
+    }
+    if (["declined", "ended"].includes(signal.type)) {
+      await endCall({ notify: false })
+      return
+    }
+    const peer = peerRef.current
+    if (!peer) return
+    if (signal.type === "offer") {
+      if (peer.currentRemoteDescription) return
+      await peer.setRemoteDescription(new RTCSessionDescription(signal.payload))
+      const answer = await peer.createAnswer()
+      await peer.setLocalDescription(answer)
+      await postSignal(callIdRef.current, "answer", answer)
+      return
+    }
+    if (signal.type === "answer") {
+      if (peer.currentRemoteDescription) return
+      await peer.setRemoteDescription(new RTCSessionDescription(signal.payload))
+      return
+    }
+    if (signal.type === "candidate") {
+      await peer.addIceCandidate(new RTCIceCandidate(signal.payload))
+    }
+  }, [endCall, postSignal])
+
+  useEffect(() => {
+    if (!conversationId || typeof navigator === "undefined") return undefined
+    let cancelled = false
+
+    const boot = async () => {
+      try {
+        endedRef.current = false
+        handledSignalIdsRef.current = new Set()
+        setCallEnded(false)
+        setEnding(false)
+        setError("")
+        setSeconds(0)
+        setRemoteStream(null)
+        setBooting(true)
+        if (!window.isSecureContext) {
+          throw new Error("Mobile chỉ cho phép gọi trên HTTPS hoặc localhost.")
+        }
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: requestedMode === "video" })
+        if (cancelled) {
+          stopMediaStream(stream)
+          return
+        }
+        setLocalStream(stream)
+        setCameraEnabled(requestedMode === "video")
+
+        if (requestedCallId) {
+          setCallId(requestedCallId)
+          setMode(requestedMode)
+          createPeer(requestedCallId, stream)
+          if (incoming) {
+            await fetch(`/api/messages/calls/${requestedCallId}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ action: "accept" }),
+            })
+          }
+          setStatus("Đang chờ tín hiệu...")
+          return
+        }
+
+        const response = await fetch("/api/messages/calls", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ conversationId, mode: requestedMode }),
+        })
+        const session = await response.json()
+        if (!response.ok) throw new Error(session.error || "Không thể bắt đầu cuộc gọi")
+        if (cancelled) return
+        setCallId(session.id)
+        setMode(session.mode)
+        const peer = createPeer(session.id, stream)
+        const offer = await peer.createOffer()
+        await peer.setLocalDescription(offer)
+        await postSignal(session.id, "offer", offer)
+        setStatus("Đang đổ chuông...")
+      } catch (caught) {
+        setError(caught.message || "Không thể mở cuộc gọi.")
+      } finally {
+        if (!cancelled) setBooting(false)
+      }
+    }
+
+    boot()
+    return () => {
+      cancelled = true
+    }
+  }, [conversationId, createPeer, incoming, postSignal, requestedCallId, requestedMode, restartToken])
+
+  useEffect(() => {
+    if (!callId || callEnded) return undefined
+    let active = true
+    let after = ""
+    const poll = async () => {
+      try {
+        const url = `/api/messages/calls/${callId}/signals${after ? `?after=${encodeURIComponent(after)}` : ""}`
+        const response = await fetch(url)
+        const data = await response.json()
+        if (!active || !response.ok) return
+        for (const signal of data.items || []) {
+          await handleSignal(signal)
+          after = signal.createdAt
+        }
+      } catch {
+        if (active) setStatus("Đang kết nối lại...")
+      }
+    }
+    poll()
+    const timer = window.setInterval(poll, 800)
+    return () => {
+      active = false
+      window.clearInterval(timer)
+    }
+  }, [callEnded, callId, handleSignal])
+
+  useEffect(() => () => {
+    peerRef.current?.close()
+    stopMediaStream(localStream)
+    stopMediaStream(remoteStream)
+  }, [localStream, remoteStream])
+
+  const toggleMic = () => {
+    localStream?.getAudioTracks().forEach((track) => {
+      track.enabled = !track.enabled
+      setMicEnabled(track.enabled)
+    })
+  }
+
+  const toggleSpeaker = () => {
+    setSpeakerEnabled((enabled) => {
+      const nextEnabled = !enabled
+      localStream?.getAudioTracks().forEach((track) => {
+        track.enabled = nextEnabled
+      })
+      setMicEnabled(nextEnabled)
+      return nextEnabled
+    })
+  }
+
+  const toggleCamera = () => {
+    localStream?.getVideoTracks().forEach((track) => {
+      track.enabled = !track.enabled
+      setCameraEnabled(track.enabled)
+    })
+  }
+
+  const callLabel = useMemo(() => {
+    if (callEnded) return "Cuộc gọi đã kết thúc"
+    if (booting) return "Đang xin quyền thiết bị"
+    if (error) return "Không thể kết nối"
+    if (remoteStream) return formatCallTime(seconds)
+    return status
+  }, [booting, callEnded, error, remoteStream, seconds, status])
+
+  if (callEnded) {
+    return (
+      <main className="flex min-h-[100dvh] items-center justify-center overflow-hidden bg-black px-4 text-white">
+        <section className="flex w-full max-w-sm flex-col items-center text-center">
+          <Avatar className="h-24 w-24 ring-1 ring-white/10 shadow-2xl">
+            {otherUser.avatarUrl && <AvatarImage src={otherUser.avatarUrl} alt={displayName} className="object-cover" />}
+            <AvatarFallback className="bg-zinc-800 text-2xl font-black text-white">{initials}</AvatarFallback>
+          </Avatar>
+          <h1 className="mt-5 max-w-full truncate text-2xl font-black tracking-normal">{displayName}</h1>
+          <p className="mt-4 text-sm font-semibold text-white">Cuộc gọi đã kết thúc</p>
+
+          <div className="mt-11 flex items-start justify-center gap-12">
+            <button type="button" onClick={recall} className="group flex flex-col items-center gap-3" aria-label="Gọi lại">
+              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-[#65d84e] text-white transition group-hover:bg-[#56c941]">
+                <PhoneCall className="h-7 w-7" />
+              </span>
+              <span className="text-sm font-semibold text-white/55 group-hover:text-white">Gọi lại</span>
+            </button>
+            <button type="button" onClick={closeCall} className="group flex flex-col items-center gap-3" aria-label="Đóng">
+              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-zinc-800 text-white transition group-hover:bg-zinc-700">
+                <X className="h-7 w-7" />
+              </span>
+              <span className="text-sm font-semibold text-white/55 group-hover:text-white">Đóng</span>
+            </button>
+          </div>
+        </section>
+      </main>
+    )
+  }
+
+  return (
+    <main className="min-h-[100dvh] overflow-hidden bg-black text-white">
+      <section className="relative flex min-h-[100dvh] flex-col overflow-hidden bg-black">
+        {isVideo && remoteStream && (
+          <video ref={remoteVideoRef} autoPlay playsInline className="absolute inset-0 h-full w-full bg-black object-cover" />
+        )}
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(39,39,42,0.45),rgba(0,0,0,0.95)_68%)]" />
+
+        <header className="relative z-20 flex items-start justify-between gap-3 px-4 pb-2 pt-[max(1rem,env(safe-area-inset-top))] sm:px-6 sm:pt-5">
+          <div className="flex min-w-0 items-center gap-3">
+            <button
+              type="button"
+              onClick={closeCall}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
+              aria-label="Quay lại tin nhắn"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+            <Avatar className="h-11 w-11 shrink-0 ring-2 ring-white/10">
+              {otherUser.avatarUrl && <AvatarImage src={otherUser.avatarUrl} alt={displayName} className="object-cover" />}
+              <AvatarFallback className="bg-zinc-800 text-sm font-black text-white">{initials}</AvatarFallback>
+            </Avatar>
+            <div className="min-w-0">
+              <h1 className="truncate text-sm font-bold sm:text-base">{displayName}</h1>
+            </div>
+          </div>
+          <button type="button" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20" aria-label="Tùy chọn cuộc gọi">
+            <MoreHorizontal className="h-5 w-5" />
+          </button>
+        </header>
+
+        <div className="relative z-10 flex min-h-0 flex-1 items-center justify-center px-4 pb-32 pt-8 text-center sm:pb-36">
+          <div className="flex max-w-md flex-col items-center">
+            {(!isVideo || !remoteStream) && (
+              <Avatar className="h-32 w-32 ring-4 ring-white/10 shadow-2xl sm:h-40 sm:w-40">
+                {otherUser.avatarUrl && <AvatarImage src={otherUser.avatarUrl} alt={displayName} className="object-cover" />}
+                <AvatarFallback className="bg-zinc-800 text-4xl font-black text-white">{initials}</AvatarFallback>
+              </Avatar>
+            )}
+            <h2 className="mt-6 max-w-full truncate text-3xl font-black tracking-normal sm:text-4xl">{displayName}</h2>
+            <p className="mt-2 text-sm font-semibold text-white/60">{callLabel}</p>
+            {error && <p className="mt-4 max-w-sm rounded-2xl bg-red-500/15 px-4 py-2 text-sm font-semibold text-red-100">{error}</p>}
+          </div>
+        </div>
+
+        {isVideo && localStream && (
+          <video ref={localVideoRef} autoPlay muted playsInline className="absolute bottom-28 right-3 z-20 h-36 w-24 rounded-2xl border border-white/15 bg-zinc-950 object-cover shadow-2xl sm:bottom-32 sm:right-6 sm:h-44 sm:w-32" />
+        )}
+        <audio ref={remoteAudioRef} autoPlay playsInline />
+
+        <footer className="absolute inset-x-0 bottom-0 z-30 flex justify-center px-3 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+          <div className="flex items-center justify-center gap-3 rounded-full bg-zinc-950/65 px-4 py-3 shadow-2xl ring-1 ring-white/10 backdrop-blur-md">
+            {isVideo && (
+              <button type="button" onClick={toggleCamera} className={`flex h-12 w-12 items-center justify-center rounded-full transition ${cameraEnabled ? "bg-zinc-700 text-white hover:bg-zinc-600" : "bg-white text-black hover:bg-zinc-200"}`} aria-label="Bật tắt camera">
+                {cameraEnabled ? <Camera className="h-5 w-5" /> : <CameraOff className="h-5 w-5" />}
+              </button>
+            )}
+            <button type="button" className="hidden h-12 w-12 items-center justify-center rounded-full bg-zinc-700 text-white transition hover:bg-zinc-600 sm:flex" aria-label="Thêm người">
+              <Plus className="h-5 w-5" />
+            </button>
+            <button type="button" onClick={toggleSpeaker} className={`flex h-12 w-12 items-center justify-center rounded-full transition ${speakerEnabled ? "bg-zinc-700 text-white hover:bg-zinc-600" : "bg-white text-black hover:bg-zinc-200"}`} aria-label="Bật tắt loa">
+              {speakerEnabled ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
+            </button>
+            <button type="button" onClick={toggleMic} className={`flex h-12 w-12 items-center justify-center rounded-full transition ${micEnabled ? "bg-zinc-700 text-white hover:bg-zinc-600" : "bg-white text-black hover:bg-zinc-200"}`} aria-label="Bật tắt micro">
+              {micEnabled ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
+            </button>
+            <button type="button" onClick={() => endCall()} disabled={ending} className="flex h-12 w-16 items-center justify-center rounded-full bg-red-500 text-white shadow-xl shadow-red-950/40 transition hover:bg-red-600 disabled:opacity-60" aria-label="Kết thúc cuộc gọi">
+              {ending ? <Loader2 className="h-6 w-6 animate-spin" /> : <PhoneOff className="h-6 w-6" />}
+            </button>
+          </div>
+        </footer>
+      </section>
+    </main>
+  )
+}

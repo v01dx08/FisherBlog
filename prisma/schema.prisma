@@ -79,6 +79,7 @@ model User {
   actedNotifications Notification[] @relation("notificationActor")
 
   sentMessages      Message[]
+  messagePins       MessagePin[]             @relation("messagePinPinnedBy")
   conversationLinks ConversationParticipant[]
   callSessionsStarted CallSession[]           @relation("callCaller")
   callSignalsSent     CallSignal[]            @relation("callSignalSender")
@@ -187,6 +188,7 @@ model Conversation {
   id           String                    @id @default(uuid())
   participants ConversationParticipant[]
   messages     Message[]
+  pinnedMessages MessagePin[]
   callSessions CallSession[]
   updatedAt    DateTime                  @default(now())
   createdAt    DateTime                  @default(now())
@@ -211,12 +213,27 @@ model Message {
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   senderId       String
   sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  pin            MessagePin?
   content        String
   isRead         Boolean      @default(false)
   createdAt      DateTime     @default(now())
 
   @@index([conversationId, createdAt])
   @@index([senderId, createdAt])
+}
+
+model MessagePin {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  messageId      String       @unique
+  message        Message      @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  pinnedById     String?
+  pinnedBy       User?        @relation("messagePinPinnedBy", fields: [pinnedById], references: [id], onDelete: SetNull)
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
+  @@index([pinnedById, createdAt])
 }
 
 model CallSession {
