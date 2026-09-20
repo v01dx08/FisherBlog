@@ -217,6 +217,10 @@ function formatVoiceTime(seconds) {
   return `${minutes}:${rest}`
 }
 
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max)
+}
+
 function supportedAudioMimeType() {
   if (typeof MediaRecorder === "undefined" || !MediaRecorder.isTypeSupported) return ""
   return [
@@ -420,6 +424,7 @@ export function MessagesPageClient({ currentUser }) {
   const [callSeconds, setCallSeconds] = useState(0)
   const [callMicEnabled, setCallMicEnabled] = useState(true)
   const [callCameraEnabled, setCallCameraEnabled] = useState(true)
+  const [callPreviewPosition, setCallPreviewPosition] = useState(null)
   const [callError, setCallError] = useState("")
   const [incomingCall, setIncomingCall] = useState(null)
   const [incomingActionLoading, setIncomingActionLoading] = useState(false)
@@ -429,6 +434,7 @@ export function MessagesPageClient({ currentUser }) {
   const pendingImagesRef = useRef([])
   const mediaRecorderRef = useRef(null)
   const callVideoRef = useRef(null)
+  const callPreviewRef = useRef(null)
   const remoteVideoRef = useRef(null)
   const remoteAudioRef = useRef(null)
   const callStreamRef = useRef(null)
@@ -437,6 +443,7 @@ export function MessagesPageClient({ currentUser }) {
   const dragDepthRef = useRef(0)
   const imageDragRef = useRef({ active: false, moved: false, originX: 0, originY: 0, startX: 0, startY: 0 })
   const handledSignalIdsRef = useRef(new Set())
+  const callPreviewDragRef = useRef(null)
   const audioChunksRef = useRef([])
   const requestedConversationHandledRef = useRef(false)
   const lastTypingSentAtRef = useRef(0)
@@ -500,6 +507,18 @@ export function MessagesPageClient({ currentUser }) {
     }
     return `${typingUsers.length} người đang nhập...`
   }, [typingUsers])
+
+  const clampCallPreviewPosition = useCallback((position) => {
+    if (typeof window === "undefined") return position
+    const rect = callPreviewRef.current?.getBoundingClientRect()
+    const width = rect?.width || 96
+    const height = rect?.height || 128
+    const padding = 12
+    return {
+      x: clamp(position.x, padding, window.innerWidth - width - padding),
+      y: clamp(position.y, padding, window.innerHeight - height - padding),
+    }
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -625,6 +644,32 @@ export function MessagesPageClient({ currentUser }) {
     if (remoteVideoRef.current) remoteVideoRef.current.srcObject = remoteStream
     if (remoteAudioRef.current) remoteAudioRef.current.srcObject = remoteStream
   }, [remoteStream])
+
+  useEffect(() => {
+    if (callState?.mode !== "video" || !remoteStream || typeof window === "undefined") return undefined
+
+    const placePreview = () => {
+      const rect = callPreviewRef.current?.getBoundingClientRect()
+      const width = rect?.width || 96
+      const height = rect?.height || 128
+      setCallPreviewPosition((position) => {
+        if (position) return clampCallPreviewPosition(position)
+        const bottomOffset = window.matchMedia("(min-width: 640px)").matches ? 112 : 96
+        return clampCallPreviewPosition({
+          x: window.innerWidth - width - 16,
+          y: window.innerHeight - height - bottomOffset,
+        })
+      })
+    }
+
+    placePreview()
+    window.addEventListener("resize", placePreview)
+    window.visualViewport?.addEventListener("resize", placePreview)
+    return () => {
+      window.removeEventListener("resize", placePreview)
+      window.visualViewport?.removeEventListener("resize", placePreview)
+    }
+  }, [callState?.mode, clampCallPreviewPosition, remoteStream])
 
   useEffect(() => () => {
     peerConnectionRef.current?.close()
@@ -1084,6 +1129,7 @@ export function MessagesPageClient({ currentUser }) {
     setCallSeconds(0)
     setCallMicEnabled(true)
     setCallCameraEnabled(true)
+    setCallPreviewPosition(null)
   }, [cleanupCallConnection])
 
   const endCall = useCallback(async ({ notify = true } = {}) => {
@@ -1113,9 +1159,39 @@ export function MessagesPageClient({ currentUser }) {
     })
   }
 
+  const startCallPreviewDrag = (event) => {
+    if (!callPreviewPosition) return
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+    callPreviewDragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: callPreviewPosition.x,
+      originY: callPreviewPosition.y,
+    }
+  }
+
+  const moveCallPreview = (event) => {
+    const drag = callPreviewDragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    setCallPreviewPosition(clampCallPreviewPosition({
+      x: drag.originX + event.clientX - drag.startX,
+      y: drag.originY + event.clientY - drag.startY,
+    }))
+  }
+
+  const stopCallPreviewDrag = (event) => {
+    if (callPreviewDragRef.current?.pointerId === event.pointerId) {
+      callPreviewDragRef.current = null
+      event.currentTarget.releasePointerCapture?.(event.pointerId)
+    }
+  }
+
   const acceptIncomingCall = () => {
-    if (!incomingCall || incomingActionLoading || !selectedConvId) return
-    openCallScreen(`/messages/call?conversationId=${encodeURIComponent(selectedConvId)}&callId=${encodeURIComponent(incomingCall.id)}&mode=${encodeURIComponent(incomingCall.mode)}&incoming=1`)
+    const callConversationId = incomingCall?.conversationId || selectedConvId
+    if (!incomingCall || incomingActionLoading || !callConversationId) return
+    setSelectedConvId(callConversationId)
+    openCallScreen(`/messages/call?conversationId=${encodeURIComponent(callConversationId)}&callId=${encodeURIComponent(incomingCall.id)}&mode=${encodeURIComponent(incomingCall.mode)}&incoming=1`)
     setIncomingCall(null)
   }
 
@@ -1251,6 +1327,31 @@ export function MessagesPageClient({ currentUser }) {
 
     return () => source.close()
   }, [activeCallId, currentUser.id, endCall, handleRemoteSignal, incomingCall?.id, selectedConvId])
+
+  useEffect(() => {
+    if (typeof EventSource === "undefined") return undefined
+    const source = new EventSource("/api/messages/events")
+
+    const handleCallEvent = (event) => {
+      const call = JSON.parse(event.data)
+      if (call.status === "ringing" && call.callerId !== currentUser.id && !activeCallId) {
+        setIncomingCall((current) => current?.id === call.id ? current : call)
+        window.navigator?.vibrate?.([180, 80, 180])
+        return
+      }
+      if (incomingCall?.id === call.id && call.status !== "ringing") {
+        setIncomingCall(null)
+      }
+    }
+
+    const handleStreamError = () => {
+      setCallError("Realtime cuộc gọi đang tự kết nối lại...")
+    }
+
+    source.addEventListener("call", handleCallEvent)
+    source.addEventListener("stream-error", handleStreamError)
+    return () => source.close()
+  }, [activeCallId, currentUser.id, incomingCall?.id])
 
   const startRecording = async () => {
     if (typeof window !== "undefined" && !window.isSecureContext) {
@@ -2339,7 +2440,18 @@ export function MessagesPageClient({ currentUser }) {
                   <video ref={callVideoRef} autoPlay playsInline muted className="absolute inset-0 h-full w-full object-cover" />
                 )}
                 {remoteStream && (
-                  <video ref={callVideoRef} autoPlay playsInline muted className="absolute bottom-24 right-4 z-10 h-32 w-24 rounded-2xl border border-white/20 object-cover shadow-2xl sm:bottom-28 sm:right-6 sm:h-44 sm:w-32" />
+                  <div
+                    ref={callPreviewRef}
+                    className={`fixed z-10 h-32 w-24 touch-none select-none overflow-hidden rounded-2xl border border-white/20 bg-slate-950 shadow-2xl sm:h-44 sm:w-32 ${callPreviewPosition ? "" : "bottom-24 right-4 sm:bottom-28 sm:right-6"}`}
+                    style={callPreviewPosition ? { left: callPreviewPosition.x, top: callPreviewPosition.y } : undefined}
+                    onPointerDown={startCallPreviewDrag}
+                    onPointerMove={moveCallPreview}
+                    onPointerUp={stopCallPreviewDrag}
+                    onPointerCancel={stopCallPreviewDrag}
+                    role="presentation"
+                  >
+                    <video ref={callVideoRef} autoPlay playsInline muted className="h-full w-full object-cover" />
+                  </div>
                 )}
               </>
             ) : (
