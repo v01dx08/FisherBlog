@@ -1221,6 +1221,10 @@ export function MessagesPageClient({ currentUser }) {
     }
     if (signal.type === "accepted") {
       setCallState((current) => current ? { ...current, status: "active" } : current)
+      const localDescription = peerConnectionRef.current?.localDescription
+      if (localDescription?.type === "offer") {
+        await postCallSignal(activeCallId, "offer", localDescription)
+      }
       return
     }
 

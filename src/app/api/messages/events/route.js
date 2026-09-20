@@ -128,7 +128,7 @@ export async function GET(request) {
                     where: {
                       senderId: { not: user.id },
                       session: { conversationId },
-                      createdAt: { gt: lastSignalAt },
+                      createdAt: { gte: lastSignalAt },
                     },
                     orderBy: { createdAt: "asc" },
                     take: 100,

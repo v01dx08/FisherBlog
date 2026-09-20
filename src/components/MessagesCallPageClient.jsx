@@ -223,7 +223,12 @@ export function MessagesCallPageClient({ currentUser }) {
     if (!signal?.id || handledSignalIdsRef.current.has(signal.id)) return
     handledSignalIdsRef.current.add(signal.id)
     if (signal.type === "accepted") {
-      setStatus("Đã nhận cuộc gọi")
+      setStatus("Đã nhận cuộc gọi, đang kết nối...")
+      const peer = peerRef.current
+      const localDescription = peer?.localDescription
+      if (localDescription?.type === "offer" && callIdRef.current) {
+        await postSignal(callIdRef.current, "offer", localDescription)
+      }
       return
     }
     if (["declined", "ended"].includes(signal.type)) {
