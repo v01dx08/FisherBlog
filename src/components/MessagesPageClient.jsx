@@ -2141,8 +2141,8 @@ export function MessagesPageClient({ currentUser }) {
                         if (recalled || callPayload) {
                           const systemText = recalled
                             ? mine
-                              ? "Bạn đã thu hồi tin nhắn"
-                              : `${recalledPayload?.recalledByName || senderName} đã thu hồi 1 tin nhắn`
+                              ? "Bạn đã thu hồi"
+                              : `${recalledPayload?.recalledByName || senderName} đã thu hồi`
                             : formatCallHistoryMessage(callPayload)
                           const SystemIcon = recalled ? CheckCheck : callPayload?.status === "declined" ? PhoneOff : Phone
                           return (
@@ -2157,7 +2157,7 @@ export function MessagesPageClient({ currentUser }) {
                               <div className="flex max-w-[min(86vw,460px)] items-center gap-2 rounded-full bg-muted/85 px-3 py-1.5 text-center text-xs font-semibold text-muted-foreground shadow-sm ring-1 ring-border/60">
                                 <SystemIcon className="h-3.5 w-3.5 shrink-0" />
                                 <span className="min-w-0 break-words">{systemText}</span>
-                                <span className="shrink-0 text-[10px] font-medium opacity-70">{formatTimeAgo(message.createdAt)}</span>
+                                {callPayload && <span className="shrink-0 text-[10px] font-medium opacity-70">{formatTimeAgo(message.createdAt)}</span>}
                               </div>
                             </div>
                           )
