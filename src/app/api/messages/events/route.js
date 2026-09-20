@@ -7,6 +7,7 @@ import { getPresence } from "@/lib/user-presence"
 
 const encoder = new TextEncoder()
 const POLL_INTERVAL_MS = 700
+const CALL_MESSAGE_PREFIX = "FISHVIET_CALL:"
 const STREAM_HEADERS = {
   "Content-Type": "text/event-stream; charset=utf-8",
   "Cache-Control": "no-cache, no-transform",
@@ -96,7 +97,10 @@ export async function GET(request) {
                 ? db.message.findMany({
                     where: {
                       conversationId,
-                      senderId: { not: user.id },
+                      OR: [
+                        { senderId: { not: user.id } },
+                        { content: { startsWith: CALL_MESSAGE_PREFIX } },
+                      ],
                       createdAt: { gt: lastMessageAt },
                     },
                     include: messageInclude,

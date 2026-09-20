@@ -9,6 +9,8 @@ import { useRouter, useSearchParams } from "next/navigation"
 const MESSAGE_MEDIA_PREFIX = "FISHVIET_MEDIA:"
 const MESSAGE_REPLY_PREFIX = "FISHVIET_REPLY:"
 const MESSAGE_RECALLED = "FISHVIET_RECALLED"
+const MESSAGE_RECALLED_PREFIX = `${MESSAGE_RECALLED}:`
+const MESSAGE_CALL_PREFIX = "FISHVIET_CALL:"
 const emojiCategories = [
   {
     id: "smileys",
@@ -187,6 +189,29 @@ function unwrapMessageContent(content) {
   return decodeReplyMessage(content)?.content || content
 }
 
+function decodeRecalledMessage(content) {
+  if (content === MESSAGE_RECALLED) return {}
+  if (!String(content || "").startsWith(MESSAGE_RECALLED_PREFIX)) return null
+  try {
+    return JSON.parse(String(content).slice(MESSAGE_RECALLED_PREFIX.length)) || {}
+  } catch {
+    return {}
+  }
+}
+
+function isRecalledMessage(content) {
+  return content === MESSAGE_RECALLED || String(content || "").startsWith(MESSAGE_RECALLED_PREFIX)
+}
+
+function decodeCallMessage(content) {
+  if (!String(content || "").startsWith(MESSAGE_CALL_PREFIX)) return null
+  try {
+    return JSON.parse(String(content).slice(MESSAGE_CALL_PREFIX.length))
+  } catch {
+    return null
+  }
+}
+
 function decodeMediaMessage(content) {
   if (!String(content || "").startsWith(MESSAGE_MEDIA_PREFIX)) return null
   try {
@@ -200,7 +225,12 @@ function decodeMediaMessage(content) {
 
 function previewMessage(content) {
   const unwrapped = unwrapMessageContent(content)
-  if (unwrapped === MESSAGE_RECALLED) return "Tin nhắn đã được thu hồi"
+  if (isRecalledMessage(unwrapped)) return "Tin nhắn đã được thu hồi"
+  const call = decodeCallMessage(unwrapped)
+  if (call) {
+    if (call.status === "declined") return call.mode === "video" ? "Cuộc gọi video bị từ chối" : "Cuộc gọi thoại bị từ chối"
+    return call.mode === "video" ? "Cuộc gọi video đã kết thúc" : "Cuộc gọi thoại đã kết thúc"
+  }
   const media = decodeMediaMessage(unwrapped)
   if (!media) return unwrapped
   if (media.kind === "image") return "Đã gửi một ảnh"
@@ -215,6 +245,15 @@ function formatVoiceTime(seconds) {
   const minutes = Math.floor(seconds / 60)
   const rest = Math.floor(seconds % 60).toString().padStart(2, "0")
   return `${minutes}:${rest}`
+}
+
+function formatCallHistoryMessage(call) {
+  const modeLabel = call?.mode === "video" ? "video" : "thoại"
+  if (call?.status === "declined") return `Cuộc gọi ${modeLabel} bị từ chối`
+  const durationSeconds = Number(call?.durationSeconds || 0)
+  return durationSeconds > 0
+    ? `Cuộc gọi ${modeLabel} đã kết thúc · ${formatVoiceTime(durationSeconds)}`
+    : `Cuộc gọi ${modeLabel} đã kết thúc`
 }
 
 function clamp(value, min, max) {
@@ -248,7 +287,7 @@ function getImageMedia(message) {
   const replyPayload = decodeReplyMessage(message.content)
   if (replyPayload) return null
   const content = unwrapMessageContent(message.content)
-  if (content === MESSAGE_RECALLED) return null
+  if (isRecalledMessage(content) || decodeCallMessage(content)) return null
   const media = decodeMediaMessage(content)
   return media?.kind === "image" ? media : null
 }
@@ -480,7 +519,7 @@ export function MessagesPageClient({ currentUser }) {
   const pinnedMessages = useMemo(
     () =>
       messages
-        .filter((message) => message.isPinned && unwrapMessageContent(message.content) !== MESSAGE_RECALLED)
+        .filter((message) => message.isPinned && !isRecalledMessage(unwrapMessageContent(message.content)))
         .sort((a, b) => new Date(b.pinnedAt || b.createdAt) - new Date(a.pinnedAt || a.createdAt)),
     [messages]
   )
@@ -488,7 +527,7 @@ export function MessagesPageClient({ currentUser }) {
     () =>
       messages.filter((message) => {
         const media = decodeMediaMessage(unwrapMessageContent(message.content))
-        return media?.url && unwrapMessageContent(message.content) !== MESSAGE_RECALLED
+        return media?.url && !isRecalledMessage(unwrapMessageContent(message.content))
       }),
     [messages]
   )
@@ -894,7 +933,8 @@ export function MessagesPageClient({ currentUser }) {
   })
 
   const togglePinMessage = async (message) => {
-    if (!selectedConvId || !message?.id || unwrapMessageContent(message.content) === MESSAGE_RECALLED) return
+    const content = unwrapMessageContent(message?.content)
+    if (!selectedConvId || !message?.id || isRecalledMessage(content) || decodeCallMessage(content)) return
     setError("")
     try {
       const response = await fetch(`/api/messages/${selectedConvId}`, {
@@ -914,7 +954,7 @@ export function MessagesPageClient({ currentUser }) {
     const content = unwrapMessageContent(message.content)
     const media = decodeMediaMessage(content)
     const value = media?.url || media?.label || content
-    if (!value || value === MESSAGE_RECALLED) return
+    if (!value || isRecalledMessage(value) || decodeCallMessage(value)) return
     try {
       await navigator.clipboard?.writeText(value)
       setError("")
@@ -933,8 +973,9 @@ export function MessagesPageClient({ currentUser }) {
     }, 1200)
   }
 
-  const recallMessage = async (message) => {
-    if (!selectedConvId || message.sender?.id !== currentUser.id || unwrapMessageContent(message.content) === MESSAGE_RECALLED) return
+  const recallMessage = async (message, { skipConfirm = false } = {}) => {
+    if (!selectedConvId || message.sender?.id !== currentUser.id || isRecalledMessage(unwrapMessageContent(message.content))) return
+    if (!skipConfirm && !window.confirm("Bạn có chắc muốn thu hồi tin nhắn này không?")) return
     setError("")
     try {
       const response = await fetch(`/api/messages/${selectedConvId}`, {
@@ -947,6 +988,17 @@ export function MessagesPageClient({ currentUser }) {
       applyUpdatedMessage(data)
     } catch (caught) {
       setError(caught.message || "Không thể thu hồi tin nhắn")
+    }
+  }
+
+  const recallMessages = async (messagesToRecall) => {
+    const ownMessages = messagesToRecall.filter((message) =>
+      message.sender?.id === currentUser.id && !isRecalledMessage(unwrapMessageContent(message.content))
+    )
+    if (!ownMessages.length) return
+    if (!window.confirm(`Bạn có chắc muốn thu hồi ${ownMessages.length} tin nhắn này không?`)) return
+    for (const message of ownMessages) {
+      await recallMessage(message, { skipConfirm: true })
     }
   }
 
@@ -2060,7 +2112,7 @@ export function MessagesPageClient({ currentUser }) {
                                         <button
                                           type="button"
                                           onClick={async () => {
-                                            for (const message of item.messages) await recallMessage(message)
+                                            await recallMessages(item.messages)
                                             setOpenMessageMenuId(null)
                                           }}
                                           className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-destructive hover:bg-destructive/10"
@@ -2080,9 +2132,36 @@ export function MessagesPageClient({ currentUser }) {
                         const mine = message.sender?.id === currentUser.id
                         const replyPayload = decodeReplyMessage(message.content)
                         const messageContent = unwrapMessageContent(message.content)
-                        const recalled = messageContent === MESSAGE_RECALLED
-                        const media = recalled ? null : decodeMediaMessage(messageContent)
+                        const recalled = isRecalledMessage(messageContent)
+                        const recalledPayload = recalled ? decodeRecalledMessage(messageContent) : null
+                        const callPayload = !recalled ? decodeCallMessage(messageContent) : null
+                        const media = recalled || callPayload ? null : decodeMediaMessage(messageContent)
                         const otherName = selectedConv.otherUser?.displayName || selectedConv.otherUser?.username || "ND"
+                        const senderName = message.sender?.displayName || message.sender?.username || otherName
+                        if (recalled || callPayload) {
+                          const systemText = recalled
+                            ? mine
+                              ? "Bạn đã thu hồi tin nhắn"
+                              : `${recalledPayload?.recalledByName || senderName} đã thu hồi 1 tin nhắn`
+                            : formatCallHistoryMessage(callPayload)
+                          const SystemIcon = recalled ? CheckCheck : callPayload?.status === "declined" ? PhoneOff : Phone
+                          return (
+                            <div
+                              key={message.id}
+                              ref={(node) => {
+                                if (node) messageRefs.current.set(message.id, node)
+                                else messageRefs.current.delete(message.id)
+                              }}
+                              className="flex justify-center px-2 py-1"
+                            >
+                              <div className="flex max-w-[min(86vw,460px)] items-center gap-2 rounded-full bg-muted/85 px-3 py-1.5 text-center text-xs font-semibold text-muted-foreground shadow-sm ring-1 ring-border/60">
+                                <SystemIcon className="h-3.5 w-3.5 shrink-0" />
+                                <span className="min-w-0 break-words">{systemText}</span>
+                                <span className="shrink-0 text-[10px] font-medium opacity-70">{formatTimeAgo(message.createdAt)}</span>
+                              </div>
+                            </div>
+                          )
+                        }
                         return (
                           <div
                             key={message.id}
