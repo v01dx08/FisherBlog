@@ -334,7 +334,7 @@ function VoiceMessagePlayer({ src, mine }) {
   }
 
   return (
-    <div className={`w-[min(58vw,220px)] rounded-[1.25rem] px-2 py-2 shadow-sm ${mine ? "bg-primary/95 text-primary-foreground" : "bg-muted text-foreground"}`}>
+    <div className={`w-full min-w-0 overflow-hidden rounded-[1.25rem] px-2 py-2 shadow-sm ${mine ? "bg-primary/95 text-primary-foreground" : "bg-muted text-foreground"}`}>
       <audio
         ref={audioRef}
         src={src}
@@ -348,19 +348,19 @@ function VoiceMessagePlayer({ src, mine }) {
         }}
         className="hidden"
       />
-      <div className="flex items-center gap-2">
+      <div className="flex min-w-0 items-center gap-2">
         <button type="button" onClick={togglePlay} className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full shadow-sm ${mine ? "bg-white text-primary hover:bg-white/90" : "bg-primary text-primary-foreground hover:bg-primary/90"}`} aria-label={playing ? "Tạm dừng voice" : "Phát voice"}>
           {playing ? <Pause className="h-4 w-4 fill-current" /> : <Play className="ml-0.5 h-4 w-4 fill-current" />}
         </button>
         <div className="min-w-0 flex-1">
-          <div className="relative h-8">
-            <div className="absolute inset-0 flex items-center gap-1">
+          <div className="relative h-8 overflow-hidden">
+            <div className="absolute inset-0 flex items-center justify-between gap-0.5 overflow-hidden">
               {waveBars.map((height, index) => {
                 const active = index / Math.max(1, waveBars.length - 1) * 100 <= progress
                 return (
                   <span
                     key={`${height}-${index}`}
-                    className={`w-1 flex-1 rounded-full transition-colors ${active ? mine ? "bg-white" : "bg-primary" : mine ? "bg-white/35" : "bg-muted-foreground/25"}`}
+                    className={`w-1 shrink-0 rounded-full transition-colors ${active ? mine ? "bg-white" : "bg-primary" : mine ? "bg-white/35" : "bg-muted-foreground/25"}`}
                     style={{ height: `${height}%` }}
                   />
                 )
@@ -2099,7 +2099,7 @@ export function MessagesPageClient({ currentUser }) {
                               </Avatar>
                             )}
                             <div className={`flex items-center gap-1.5 ${mine ? "flex-row-reverse" : ""}`}>
-                              <div className={`${media?.kind === "image" ? "max-w-[min(76vw,320px)] p-1" : media?.kind === "audio" ? "max-w-[min(76vw,260px)] p-1" : media?.kind === "sticker" ? "max-w-[68vw] px-2 py-1.5" : "max-w-[min(72vw,420px)] px-3 py-2"} rounded-[1.35rem] text-sm leading-5 shadow-sm md:max-w-[62%] ${mine ? "rounded-br-md bg-primary text-primary-foreground" : "rounded-bl-md bg-muted text-foreground"}`}>
+                              <div className={`${media?.kind === "image" ? "max-w-[min(76vw,320px)] p-1" : media?.kind === "audio" ? "w-[min(76vw,260px)] overflow-hidden p-1" : media?.kind === "sticker" ? "max-w-[68vw] px-2 py-1.5" : "max-w-[min(72vw,420px)] px-3 py-2"} rounded-[1.35rem] text-sm leading-5 shadow-sm md:max-w-[62%] ${mine ? "rounded-br-md bg-primary text-primary-foreground" : "rounded-bl-md bg-muted text-foreground"}`}>
                                 {message.isPinned && (
                                   <div className={`mb-1 flex items-center gap-1 text-[10px] font-bold ${mine ? "text-primary-foreground/80" : "text-primary"}`}>
                                     <Pin className="h-3 w-3" />
