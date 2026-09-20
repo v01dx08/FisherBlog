@@ -1823,12 +1823,12 @@ export function MessagesPageClient({ currentUser }) {
                       <h2 className="truncate text-sm font-bold text-foreground">{conversationDisplayName || selectedConv.otherUser?.displayName || selectedConv.otherUser?.username}</h2>
                       <p className={`truncate text-xs ${selectedConv.otherUser?.isOnline ? "text-primary" : "text-muted-foreground"}`}>{formatPresence(selectedConv.otherUser)}</p>
                     </div>
-                    <div className="flex shrink-0 items-center gap-1 text-primary">
-                      <button type="button" onClick={() => startCall("audio")} disabled={callStarting} className="kinetic flex h-9 w-9 items-center justify-center rounded-full hover:bg-primary/10 disabled:opacity-45" aria-label="Gọi thoại">
+                    <div className="flex shrink-0 items-center gap-1.5 text-primary">
+                      <button type="button" onClick={() => startCall("audio")} disabled={callStarting} className="kinetic flex h-11 w-11 items-center justify-center rounded-full hover:bg-primary/10 disabled:opacity-45 md:h-9 md:w-9" aria-label="Gọi thoại">
                         {callStarting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Phone className="h-4 w-4" />}
                       </button>
-                      <button type="button" onClick={() => startCall("video")} disabled={callStarting} className="kinetic flex h-9 w-9 items-center justify-center rounded-full hover:bg-primary/10 disabled:opacity-45" aria-label="Gọi video">
-                        <Video className="h-4 w-4" />
+                      <button type="button" onClick={() => startCall("video")} disabled={callStarting} className="kinetic flex h-11 w-11 items-center justify-center rounded-full hover:bg-primary/10 disabled:opacity-45 md:h-9 md:w-9" aria-label="Gọi video">
+                        {callStarting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Video className="h-4 w-4" />}
                       </button>
                       <button type="button" onClick={() => setShowConversationInfo((open) => !open)} className={`kinetic hidden h-9 w-9 items-center justify-center rounded-full hover:bg-primary/10 sm:flex ${showConversationInfo ? "bg-primary/10" : ""}`} aria-label="Thông tin hội thoại" aria-expanded={showConversationInfo}>
                         <Info className="h-4 w-4" />
@@ -2310,12 +2310,18 @@ export function MessagesPageClient({ currentUser }) {
             </Avatar>
             <p className="mt-4 text-lg font-black">{incomingCall.caller?.displayName || incomingCall.caller?.username || "Người dùng"}</p>
             <p className="mt-1 text-sm text-muted-foreground">{incomingCall.mode === "video" ? "Đang gọi video..." : "Đang gọi thoại..."}</p>
-            <div className="mt-5 flex items-center justify-center gap-4">
-              <button type="button" onClick={declineIncomingCall} disabled={incomingActionLoading} className="kinetic flex h-14 w-14 items-center justify-center rounded-full bg-red-500 text-white shadow-lg hover:bg-red-600 disabled:opacity-50" aria-label="Từ chối cuộc gọi">
-                <PhoneOff className="h-6 w-6" />
+            <div className="mt-5 flex items-start justify-center gap-8">
+              <button type="button" onClick={declineIncomingCall} disabled={incomingActionLoading} className="kinetic flex flex-col items-center gap-2 text-xs font-bold text-muted-foreground disabled:opacity-50" aria-label="Từ chối cuộc gọi">
+                <span className="flex h-16 w-16 items-center justify-center rounded-full bg-red-500 text-white shadow-lg hover:bg-red-600">
+                  <PhoneOff className="h-6 w-6" />
+                </span>
+                <span>Từ chối</span>
               </button>
-              <button type="button" onClick={acceptIncomingCall} disabled={incomingActionLoading} className="kinetic flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg hover:bg-emerald-600 disabled:opacity-50" aria-label="Nhận cuộc gọi">
-                {incomingActionLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : incomingCall.mode === "video" ? <Video className="h-6 w-6" /> : <Phone className="h-6 w-6" />}
+              <button type="button" onClick={acceptIncomingCall} disabled={incomingActionLoading} className="kinetic flex flex-col items-center gap-2 text-xs font-bold text-muted-foreground disabled:opacity-50" aria-label="Nhận cuộc gọi">
+                <span className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg hover:bg-emerald-600">
+                  {incomingActionLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : incomingCall.mode === "video" ? <Video className="h-6 w-6" /> : <Phone className="h-6 w-6" />}
+                </span>
+                <span>Nhận</span>
               </button>
             </div>
           </section>

@@ -8,10 +8,8 @@ import {
   Loader2,
   Mic,
   MicOff,
-  MoreHorizontal,
   PhoneCall,
   PhoneOff,
-  Plus,
   Volume2,
   VolumeX,
   X,
@@ -65,6 +63,7 @@ export function MessagesCallPageClient({ currentUser }) {
   const displayName = otherUser.displayName || otherUser.username || "Cuộc gọi"
   const initials = displayName.slice(0, 2).toUpperCase()
   const isVideo = mode === "video"
+  const controlsDisabled = booting || Boolean(error) || !localStream
 
   const closeCall = useCallback(() => {
     if (typeof window !== "undefined" && window.opener) {
@@ -223,7 +222,13 @@ export function MessagesCallPageClient({ currentUser }) {
         if (!window.isSecureContext) {
           throw new Error("Mobile chỉ cho phép gọi trên HTTPS hoặc localhost.")
         }
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: requestedMode === "video" })
+        if (!navigator.mediaDevices?.getUserMedia) {
+          throw new Error("Trình duyệt này chưa hỗ trợ gọi bằng camera/micro.")
+        }
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: requestedMode === "video" ? { facingMode: "user" } : false,
+        })
         if (cancelled) {
           stopMediaStream(stream)
           return
@@ -314,14 +319,7 @@ export function MessagesCallPageClient({ currentUser }) {
   }
 
   const toggleSpeaker = () => {
-    setSpeakerEnabled((enabled) => {
-      const nextEnabled = !enabled
-      localStream?.getAudioTracks().forEach((track) => {
-        track.enabled = nextEnabled
-      })
-      setMicEnabled(nextEnabled)
-      return nextEnabled
-    })
+    setSpeakerEnabled((enabled) => !enabled)
   }
 
   const toggleCamera = () => {
@@ -382,7 +380,7 @@ export function MessagesCallPageClient({ currentUser }) {
             <button
               type="button"
               onClick={closeCall}
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
               aria-label="Quay lại tin nhắn"
             >
               <ArrowLeft className="h-5 w-5" />
@@ -393,14 +391,12 @@ export function MessagesCallPageClient({ currentUser }) {
             </Avatar>
             <div className="min-w-0">
               <h1 className="truncate text-sm font-bold sm:text-base">{displayName}</h1>
+              <p className="truncate text-xs font-semibold text-white/55">{isVideo ? "Video call" : "Voice call"}</p>
             </div>
           </div>
-          <button type="button" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20" aria-label="Tùy chọn cuộc gọi">
-            <MoreHorizontal className="h-5 w-5" />
-          </button>
         </header>
 
-        <div className="relative z-10 flex min-h-0 flex-1 items-center justify-center px-4 pb-32 pt-8 text-center sm:pb-36">
+        <div className="relative z-10 flex min-h-0 flex-1 items-center justify-center px-4 pb-36 pt-6 text-center sm:pb-40">
           <div className="flex max-w-md flex-col items-center">
             {(!isVideo || !remoteStream) && (
               <Avatar className="h-32 w-32 ring-4 ring-white/10 shadow-2xl sm:h-40 sm:w-40">
@@ -410,32 +406,36 @@ export function MessagesCallPageClient({ currentUser }) {
             )}
             <h2 className="mt-6 max-w-full truncate text-3xl font-black tracking-normal sm:text-4xl">{displayName}</h2>
             <p className="mt-2 text-sm font-semibold text-white/60">{callLabel}</p>
-            {error && <p className="mt-4 max-w-sm rounded-2xl bg-red-500/15 px-4 py-2 text-sm font-semibold text-red-100">{error}</p>}
+            {error && (
+              <div className="mt-4 max-w-sm rounded-2xl bg-red-500/15 px-4 py-3 text-sm font-semibold text-red-100">
+                <p>{error}</p>
+                <button type="button" onClick={closeCall} className="mt-3 min-h-11 rounded-full bg-white px-5 text-sm font-bold text-black">
+                  Quay lại tin nhắn
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
         {isVideo && localStream && (
-          <video ref={localVideoRef} autoPlay muted playsInline className="absolute bottom-28 right-3 z-20 h-36 w-24 rounded-2xl border border-white/15 bg-zinc-950 object-cover shadow-2xl sm:bottom-32 sm:right-6 sm:h-44 sm:w-32" />
+          <video ref={localVideoRef} autoPlay muted playsInline className="absolute bottom-32 right-3 z-20 h-32 w-24 rounded-2xl border border-white/15 bg-zinc-950 object-cover shadow-2xl sm:bottom-36 sm:right-6 sm:h-44 sm:w-32" />
         )}
         <audio ref={remoteAudioRef} autoPlay playsInline />
 
         <footer className="absolute inset-x-0 bottom-0 z-30 flex justify-center px-3 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
-          <div className="flex items-center justify-center gap-3 rounded-full bg-zinc-950/65 px-4 py-3 shadow-2xl ring-1 ring-white/10 backdrop-blur-md">
+          <div className="scrollbar-none flex max-w-[calc(100vw-1.5rem)] items-center justify-center gap-2 overflow-x-auto rounded-full bg-zinc-950/75 px-3 py-3 shadow-2xl ring-1 ring-white/10 backdrop-blur-md sm:gap-3 sm:px-4">
             {isVideo && (
-              <button type="button" onClick={toggleCamera} className={`flex h-12 w-12 items-center justify-center rounded-full transition ${cameraEnabled ? "bg-zinc-700 text-white hover:bg-zinc-600" : "bg-white text-black hover:bg-zinc-200"}`} aria-label="Bật tắt camera">
+              <button type="button" onClick={toggleCamera} disabled={controlsDisabled} className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full transition disabled:opacity-45 ${cameraEnabled ? "bg-zinc-700 text-white hover:bg-zinc-600" : "bg-white text-black hover:bg-zinc-200"}`} aria-label={cameraEnabled ? "Tắt camera" : "Bật camera"}>
                 {cameraEnabled ? <Camera className="h-5 w-5" /> : <CameraOff className="h-5 w-5" />}
               </button>
             )}
-            <button type="button" className="hidden h-12 w-12 items-center justify-center rounded-full bg-zinc-700 text-white transition hover:bg-zinc-600 sm:flex" aria-label="Thêm người">
-              <Plus className="h-5 w-5" />
-            </button>
-            <button type="button" onClick={toggleSpeaker} className={`flex h-12 w-12 items-center justify-center rounded-full transition ${speakerEnabled ? "bg-zinc-700 text-white hover:bg-zinc-600" : "bg-white text-black hover:bg-zinc-200"}`} aria-label="Bật tắt loa">
+            <button type="button" onClick={toggleSpeaker} disabled={controlsDisabled || !remoteStream} className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full transition disabled:opacity-45 ${speakerEnabled ? "bg-zinc-700 text-white hover:bg-zinc-600" : "bg-white text-black hover:bg-zinc-200"}`} aria-label={speakerEnabled ? "Tắt loa" : "Bật loa"}>
               {speakerEnabled ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
             </button>
-            <button type="button" onClick={toggleMic} className={`flex h-12 w-12 items-center justify-center rounded-full transition ${micEnabled ? "bg-zinc-700 text-white hover:bg-zinc-600" : "bg-white text-black hover:bg-zinc-200"}`} aria-label="Bật tắt micro">
+            <button type="button" onClick={toggleMic} disabled={controlsDisabled} className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full transition disabled:opacity-45 ${micEnabled ? "bg-zinc-700 text-white hover:bg-zinc-600" : "bg-white text-black hover:bg-zinc-200"}`} aria-label={micEnabled ? "Tắt micro" : "Bật micro"}>
               {micEnabled ? <Mic className="h-5 w-5" /> : <MicOff className="h-5 w-5" />}
             </button>
-            <button type="button" onClick={() => endCall()} disabled={ending} className="flex h-12 w-16 items-center justify-center rounded-full bg-red-500 text-white shadow-xl shadow-red-950/40 transition hover:bg-red-600 disabled:opacity-60" aria-label="Kết thúc cuộc gọi">
+            <button type="button" onClick={() => endCall()} disabled={ending} className="flex h-12 w-16 shrink-0 items-center justify-center rounded-full bg-red-500 text-white shadow-xl shadow-red-950/40 transition hover:bg-red-600 disabled:opacity-60" aria-label="Kết thúc cuộc gọi">
               {ending ? <Loader2 className="h-6 w-6 animate-spin" /> : <PhoneOff className="h-6 w-6" />}
             </button>
           </div>
