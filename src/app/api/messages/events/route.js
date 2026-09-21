@@ -7,6 +7,7 @@ import { getPresence } from "@/lib/user-presence"
 
 const encoder = new TextEncoder()
 const POLL_INTERVAL_MS = 700
+const CALL_MESSAGE_PREFIX = "FISHVIET_CALL:"
 const STREAM_HEADERS = {
   "Content-Type": "text/event-stream; charset=utf-8",
   "Cache-Control": "no-cache, no-transform",
@@ -64,11 +65,14 @@ export async function GET(request) {
     const user = await requireUser(request)
     const url = new URL(request.url)
     const conversationId = String(url.searchParams.get("conversationId") || "")
-    await requireConversationParticipant(conversationId, user.id)
-    const otherParticipant = await db.conversationParticipant.findFirst({
-      where: { conversationId, userId: { not: user.id } },
-      include: { user: { select: messageUserSelect } },
-    })
+    let otherParticipant = null
+    if (conversationId) {
+      await requireConversationParticipant(conversationId, user.id)
+      otherParticipant = await db.conversationParticipant.findFirst({
+        where: { conversationId, userId: { not: user.id } },
+        include: { user: { select: messageUserSelect } },
+      })
+    }
 
     let lastMessageAt = new Date(Date.now() - 5_000)
     let lastCallAt = new Date(Date.now() - 5_000)
@@ -83,46 +87,57 @@ export async function GET(request) {
 
     const stream = new ReadableStream({
       async start(controller) {
-        controller.enqueue(eventChunk("ready", { conversationId }))
+        controller.enqueue(eventChunk("ready", { conversationId: conversationId || null }))
         let lastPingAt = Date.now()
 
         while (!closed) {
           try {
             const [messages, recentMessages, calls, signals] = await Promise.all([
-              db.message.findMany({
-                where: {
-                  conversationId,
-                  senderId: { not: user.id },
-                  createdAt: { gt: lastMessageAt },
-                },
-                include: messageInclude,
-                orderBy: { createdAt: "asc" },
-                take: 50,
-              }),
-              db.message.findMany({
-                where: { conversationId },
-                include: messageInclude,
-                orderBy: { createdAt: "desc" },
-                take: 100,
-              }),
+              conversationId
+                ? db.message.findMany({
+                    where: {
+                      conversationId,
+                      OR: [
+                        { senderId: { not: user.id } },
+                        { content: { startsWith: CALL_MESSAGE_PREFIX } },
+                      ],
+                      createdAt: { gt: lastMessageAt },
+                    },
+                    include: messageInclude,
+                    orderBy: { createdAt: "asc" },
+                    take: 50,
+                  })
+                : [],
+              conversationId
+                ? db.message.findMany({
+                    where: { conversationId },
+                    include: messageInclude,
+                    orderBy: { createdAt: "desc" },
+                    take: 100,
+                  })
+                : [],
               db.callSession.findMany({
                 where: {
-                  conversationId,
+                  ...(conversationId
+                    ? { conversationId }
+                    : { conversation: { participants: { some: { userId: user.id } } } }),
                   updatedAt: { gt: lastCallAt },
                 },
                 include: { caller: { select: callUserSelect } },
                 orderBy: { updatedAt: "asc" },
                 take: 20,
               }),
-              db.callSignal.findMany({
-                where: {
-                  senderId: { not: user.id },
-                  session: { conversationId },
-                  createdAt: { gt: lastSignalAt },
-                },
-                orderBy: { createdAt: "asc" },
-                take: 100,
-              }),
+              conversationId
+                ? db.callSignal.findMany({
+                    where: {
+                      senderId: { not: user.id },
+                      session: { conversationId },
+                      createdAt: { gte: lastSignalAt },
+                    },
+                    orderBy: { createdAt: "asc" },
+                    take: 100,
+                  })
+                : [],
             ])
 
             messages.forEach((message) => {
@@ -146,11 +161,13 @@ export async function GET(request) {
             calls.forEach((call) => controller.enqueue(eventChunk("call", call)))
             signals.forEach((signal) => controller.enqueue(eventChunk("signal", signal)))
 
-            const typingUsers = getTypingUsers(conversationId, user.id)
-            const typingPayload = JSON.stringify(typingUsers.map((item) => item.userId).sort())
-            if (typingPayload !== lastTypingPayload) {
-              controller.enqueue(eventChunk("typing", { users: typingUsers }))
-              lastTypingPayload = typingPayload
+            if (conversationId) {
+              const typingUsers = getTypingUsers(conversationId, user.id)
+              const typingPayload = JSON.stringify(typingUsers.map((item) => item.userId).sort())
+              if (typingPayload !== lastTypingPayload) {
+                controller.enqueue(eventChunk("typing", { users: typingUsers }))
+                lastTypingPayload = typingPayload
+              }
             }
 
             if (otherParticipant?.user) {

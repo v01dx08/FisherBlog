@@ -18,7 +18,7 @@ export async function GET(request, { params }) {
       where: {
         sessionId: callId,
         senderId: { not: user.id },
-        ...(afterDate && !Number.isNaN(afterDate.getTime()) ? { createdAt: { gt: afterDate } } : {}),
+        ...(afterDate && !Number.isNaN(afterDate.getTime()) ? { createdAt: { gte: afterDate } } : {}),
       },
       orderBy: { createdAt: "asc" },
       take: 50,

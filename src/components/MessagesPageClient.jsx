@@ -9,6 +9,8 @@ import { useRouter, useSearchParams } from "next/navigation"
 const MESSAGE_MEDIA_PREFIX = "FISHVIET_MEDIA:"
 const MESSAGE_REPLY_PREFIX = "FISHVIET_REPLY:"
 const MESSAGE_RECALLED = "FISHVIET_RECALLED"
+const MESSAGE_RECALLED_PREFIX = `${MESSAGE_RECALLED}:`
+const MESSAGE_CALL_PREFIX = "FISHVIET_CALL:"
 const emojiCategories = [
   {
     id: "smileys",
@@ -187,6 +189,29 @@ function unwrapMessageContent(content) {
   return decodeReplyMessage(content)?.content || content
 }
 
+function decodeRecalledMessage(content) {
+  if (content === MESSAGE_RECALLED) return {}
+  if (!String(content || "").startsWith(MESSAGE_RECALLED_PREFIX)) return null
+  try {
+    return JSON.parse(String(content).slice(MESSAGE_RECALLED_PREFIX.length)) || {}
+  } catch {
+    return {}
+  }
+}
+
+function isRecalledMessage(content) {
+  return content === MESSAGE_RECALLED || String(content || "").startsWith(MESSAGE_RECALLED_PREFIX)
+}
+
+function decodeCallMessage(content) {
+  if (!String(content || "").startsWith(MESSAGE_CALL_PREFIX)) return null
+  try {
+    return JSON.parse(String(content).slice(MESSAGE_CALL_PREFIX.length))
+  } catch {
+    return null
+  }
+}
+
 function decodeMediaMessage(content) {
   if (!String(content || "").startsWith(MESSAGE_MEDIA_PREFIX)) return null
   try {
@@ -200,7 +225,12 @@ function decodeMediaMessage(content) {
 
 function previewMessage(content) {
   const unwrapped = unwrapMessageContent(content)
-  if (unwrapped === MESSAGE_RECALLED) return "Tin nhắn đã được thu hồi"
+  if (isRecalledMessage(unwrapped)) return "Tin nhắn đã được thu hồi"
+  const call = decodeCallMessage(unwrapped)
+  if (call) {
+    if (call.status === "declined") return call.mode === "video" ? "Cuộc gọi video bị từ chối" : "Cuộc gọi thoại bị từ chối"
+    return call.mode === "video" ? "Cuộc gọi video đã kết thúc" : "Cuộc gọi thoại đã kết thúc"
+  }
   const media = decodeMediaMessage(unwrapped)
   if (!media) return unwrapped
   if (media.kind === "image") return "Đã gửi một ảnh"
@@ -215,6 +245,19 @@ function formatVoiceTime(seconds) {
   const minutes = Math.floor(seconds / 60)
   const rest = Math.floor(seconds % 60).toString().padStart(2, "0")
   return `${minutes}:${rest}`
+}
+
+function formatCallHistoryMessage(call) {
+  const modeLabel = call?.mode === "video" ? "video" : "thoại"
+  if (call?.status === "declined") return `Cuộc gọi ${modeLabel} bị từ chối`
+  const durationSeconds = Number(call?.durationSeconds || 0)
+  return durationSeconds > 0
+    ? `Cuộc gọi ${modeLabel} đã kết thúc · ${formatVoiceTime(durationSeconds)}`
+    : `Cuộc gọi ${modeLabel} đã kết thúc`
+}
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max)
 }
 
 function supportedAudioMimeType() {
@@ -244,7 +287,7 @@ function getImageMedia(message) {
   const replyPayload = decodeReplyMessage(message.content)
   if (replyPayload) return null
   const content = unwrapMessageContent(message.content)
-  if (content === MESSAGE_RECALLED) return null
+  if (isRecalledMessage(content) || decodeCallMessage(content)) return null
   const media = decodeMediaMessage(content)
   return media?.kind === "image" ? media : null
 }
@@ -330,7 +373,7 @@ function VoiceMessagePlayer({ src, mine }) {
   }
 
   return (
-    <div className={`w-[min(58vw,220px)] rounded-[1.25rem] px-2 py-2 shadow-sm ${mine ? "bg-primary/95 text-primary-foreground" : "bg-muted text-foreground"}`}>
+    <div className={`w-full min-w-0 overflow-hidden rounded-[1.25rem] px-2 py-2 shadow-sm ${mine ? "bg-primary/95 text-primary-foreground" : "bg-muted text-foreground"}`}>
       <audio
         ref={audioRef}
         src={src}
@@ -344,19 +387,19 @@ function VoiceMessagePlayer({ src, mine }) {
         }}
         className="hidden"
       />
-      <div className="flex items-center gap-2">
+      <div className="flex min-w-0 items-center gap-2">
         <button type="button" onClick={togglePlay} className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full shadow-sm ${mine ? "bg-white text-primary hover:bg-white/90" : "bg-primary text-primary-foreground hover:bg-primary/90"}`} aria-label={playing ? "Tạm dừng voice" : "Phát voice"}>
           {playing ? <Pause className="h-4 w-4 fill-current" /> : <Play className="ml-0.5 h-4 w-4 fill-current" />}
         </button>
         <div className="min-w-0 flex-1">
-          <div className="relative h-8">
-            <div className="absolute inset-0 flex items-center gap-1">
+          <div className="relative h-8 overflow-hidden">
+            <div className="absolute inset-0 flex items-center justify-between gap-0.5 overflow-hidden">
               {waveBars.map((height, index) => {
                 const active = index / Math.max(1, waveBars.length - 1) * 100 <= progress
                 return (
                   <span
                     key={`${height}-${index}`}
-                    className={`w-1 flex-1 rounded-full transition-colors ${active ? mine ? "bg-white" : "bg-primary" : mine ? "bg-white/35" : "bg-muted-foreground/25"}`}
+                    className={`w-1 shrink-0 rounded-full transition-colors ${active ? mine ? "bg-white" : "bg-primary" : mine ? "bg-white/35" : "bg-muted-foreground/25"}`}
                     style={{ height: `${height}%` }}
                   />
                 )
@@ -420,6 +463,7 @@ export function MessagesPageClient({ currentUser }) {
   const [callSeconds, setCallSeconds] = useState(0)
   const [callMicEnabled, setCallMicEnabled] = useState(true)
   const [callCameraEnabled, setCallCameraEnabled] = useState(true)
+  const [callPreviewPosition, setCallPreviewPosition] = useState(null)
   const [callError, setCallError] = useState("")
   const [incomingCall, setIncomingCall] = useState(null)
   const [incomingActionLoading, setIncomingActionLoading] = useState(false)
@@ -429,6 +473,7 @@ export function MessagesPageClient({ currentUser }) {
   const pendingImagesRef = useRef([])
   const mediaRecorderRef = useRef(null)
   const callVideoRef = useRef(null)
+  const callPreviewRef = useRef(null)
   const remoteVideoRef = useRef(null)
   const remoteAudioRef = useRef(null)
   const callStreamRef = useRef(null)
@@ -437,6 +482,7 @@ export function MessagesPageClient({ currentUser }) {
   const dragDepthRef = useRef(0)
   const imageDragRef = useRef({ active: false, moved: false, originX: 0, originY: 0, startX: 0, startY: 0 })
   const handledSignalIdsRef = useRef(new Set())
+  const callPreviewDragRef = useRef(null)
   const audioChunksRef = useRef([])
   const requestedConversationHandledRef = useRef(false)
   const lastTypingSentAtRef = useRef(0)
@@ -473,7 +519,7 @@ export function MessagesPageClient({ currentUser }) {
   const pinnedMessages = useMemo(
     () =>
       messages
-        .filter((message) => message.isPinned && unwrapMessageContent(message.content) !== MESSAGE_RECALLED)
+        .filter((message) => message.isPinned && !isRecalledMessage(unwrapMessageContent(message.content)))
         .sort((a, b) => new Date(b.pinnedAt || b.createdAt) - new Date(a.pinnedAt || a.createdAt)),
     [messages]
   )
@@ -481,7 +527,7 @@ export function MessagesPageClient({ currentUser }) {
     () =>
       messages.filter((message) => {
         const media = decodeMediaMessage(unwrapMessageContent(message.content))
-        return media?.url && unwrapMessageContent(message.content) !== MESSAGE_RECALLED
+        return media?.url && !isRecalledMessage(unwrapMessageContent(message.content))
       }),
     [messages]
   )
@@ -500,6 +546,18 @@ export function MessagesPageClient({ currentUser }) {
     }
     return `${typingUsers.length} người đang nhập...`
   }, [typingUsers])
+
+  const clampCallPreviewPosition = useCallback((position) => {
+    if (typeof window === "undefined") return position
+    const rect = callPreviewRef.current?.getBoundingClientRect()
+    const width = rect?.width || 96
+    const height = rect?.height || 128
+    const padding = 12
+    return {
+      x: clamp(position.x, padding, window.innerWidth - width - padding),
+      y: clamp(position.y, padding, window.innerHeight - height - padding),
+    }
+  }, [])
 
   useEffect(() => {
     let active = true
@@ -625,6 +683,32 @@ export function MessagesPageClient({ currentUser }) {
     if (remoteVideoRef.current) remoteVideoRef.current.srcObject = remoteStream
     if (remoteAudioRef.current) remoteAudioRef.current.srcObject = remoteStream
   }, [remoteStream])
+
+  useEffect(() => {
+    if (callState?.mode !== "video" || !remoteStream || typeof window === "undefined") return undefined
+
+    const placePreview = () => {
+      const rect = callPreviewRef.current?.getBoundingClientRect()
+      const width = rect?.width || 96
+      const height = rect?.height || 128
+      setCallPreviewPosition((position) => {
+        if (position) return clampCallPreviewPosition(position)
+        const bottomOffset = window.matchMedia("(min-width: 640px)").matches ? 112 : 96
+        return clampCallPreviewPosition({
+          x: window.innerWidth - width - 16,
+          y: window.innerHeight - height - bottomOffset,
+        })
+      })
+    }
+
+    placePreview()
+    window.addEventListener("resize", placePreview)
+    window.visualViewport?.addEventListener("resize", placePreview)
+    return () => {
+      window.removeEventListener("resize", placePreview)
+      window.visualViewport?.removeEventListener("resize", placePreview)
+    }
+  }, [callState?.mode, clampCallPreviewPosition, remoteStream])
 
   useEffect(() => () => {
     peerConnectionRef.current?.close()
@@ -849,7 +933,8 @@ export function MessagesPageClient({ currentUser }) {
   })
 
   const togglePinMessage = async (message) => {
-    if (!selectedConvId || !message?.id || unwrapMessageContent(message.content) === MESSAGE_RECALLED) return
+    const content = unwrapMessageContent(message?.content)
+    if (!selectedConvId || !message?.id || isRecalledMessage(content) || decodeCallMessage(content)) return
     setError("")
     try {
       const response = await fetch(`/api/messages/${selectedConvId}`, {
@@ -869,7 +954,7 @@ export function MessagesPageClient({ currentUser }) {
     const content = unwrapMessageContent(message.content)
     const media = decodeMediaMessage(content)
     const value = media?.url || media?.label || content
-    if (!value || value === MESSAGE_RECALLED) return
+    if (!value || isRecalledMessage(value) || decodeCallMessage(value)) return
     try {
       await navigator.clipboard?.writeText(value)
       setError("")
@@ -888,8 +973,9 @@ export function MessagesPageClient({ currentUser }) {
     }, 1200)
   }
 
-  const recallMessage = async (message) => {
-    if (!selectedConvId || message.sender?.id !== currentUser.id || unwrapMessageContent(message.content) === MESSAGE_RECALLED) return
+  const recallMessage = async (message, { skipConfirm = false } = {}) => {
+    if (!selectedConvId || message.sender?.id !== currentUser.id || isRecalledMessage(unwrapMessageContent(message.content))) return
+    if (!skipConfirm && !window.confirm("Bạn có chắc muốn thu hồi tin nhắn này không?")) return
     setError("")
     try {
       const response = await fetch(`/api/messages/${selectedConvId}`, {
@@ -902,6 +988,17 @@ export function MessagesPageClient({ currentUser }) {
       applyUpdatedMessage(data)
     } catch (caught) {
       setError(caught.message || "Không thể thu hồi tin nhắn")
+    }
+  }
+
+  const recallMessages = async (messagesToRecall) => {
+    const ownMessages = messagesToRecall.filter((message) =>
+      message.sender?.id === currentUser.id && !isRecalledMessage(unwrapMessageContent(message.content))
+    )
+    if (!ownMessages.length) return
+    if (!window.confirm(`Bạn có chắc muốn thu hồi ${ownMessages.length} tin nhắn này không?`)) return
+    for (const message of ownMessages) {
+      await recallMessage(message, { skipConfirm: true })
     }
   }
 
@@ -1084,6 +1181,7 @@ export function MessagesPageClient({ currentUser }) {
     setCallSeconds(0)
     setCallMicEnabled(true)
     setCallCameraEnabled(true)
+    setCallPreviewPosition(null)
   }, [cleanupCallConnection])
 
   const endCall = useCallback(async ({ notify = true } = {}) => {
@@ -1113,9 +1211,39 @@ export function MessagesPageClient({ currentUser }) {
     })
   }
 
+  const startCallPreviewDrag = (event) => {
+    if (!callPreviewPosition) return
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+    callPreviewDragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: callPreviewPosition.x,
+      originY: callPreviewPosition.y,
+    }
+  }
+
+  const moveCallPreview = (event) => {
+    const drag = callPreviewDragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    setCallPreviewPosition(clampCallPreviewPosition({
+      x: drag.originX + event.clientX - drag.startX,
+      y: drag.originY + event.clientY - drag.startY,
+    }))
+  }
+
+  const stopCallPreviewDrag = (event) => {
+    if (callPreviewDragRef.current?.pointerId === event.pointerId) {
+      callPreviewDragRef.current = null
+      event.currentTarget.releasePointerCapture?.(event.pointerId)
+    }
+  }
+
   const acceptIncomingCall = () => {
-    if (!incomingCall || incomingActionLoading || !selectedConvId) return
-    openCallScreen(`/messages/call?conversationId=${encodeURIComponent(selectedConvId)}&callId=${encodeURIComponent(incomingCall.id)}&mode=${encodeURIComponent(incomingCall.mode)}&incoming=1`)
+    const callConversationId = incomingCall?.conversationId || selectedConvId
+    if (!incomingCall || incomingActionLoading || !callConversationId) return
+    setSelectedConvId(callConversationId)
+    openCallScreen(`/messages/call?conversationId=${encodeURIComponent(callConversationId)}&callId=${encodeURIComponent(incomingCall.id)}&mode=${encodeURIComponent(incomingCall.mode)}&incoming=1`)
     setIncomingCall(null)
   }
 
@@ -1145,6 +1273,10 @@ export function MessagesPageClient({ currentUser }) {
     }
     if (signal.type === "accepted") {
       setCallState((current) => current ? { ...current, status: "active" } : current)
+      const localDescription = peerConnectionRef.current?.localDescription
+      if (localDescription?.type === "offer") {
+        await postCallSignal(activeCallId, "offer", localDescription)
+      }
       return
     }
 
@@ -1251,6 +1383,31 @@ export function MessagesPageClient({ currentUser }) {
 
     return () => source.close()
   }, [activeCallId, currentUser.id, endCall, handleRemoteSignal, incomingCall?.id, selectedConvId])
+
+  useEffect(() => {
+    if (typeof EventSource === "undefined") return undefined
+    const source = new EventSource("/api/messages/events")
+
+    const handleCallEvent = (event) => {
+      const call = JSON.parse(event.data)
+      if (call.status === "ringing" && call.callerId !== currentUser.id && !activeCallId) {
+        setIncomingCall((current) => current?.id === call.id ? current : call)
+        window.navigator?.vibrate?.([180, 80, 180])
+        return
+      }
+      if (incomingCall?.id === call.id && call.status !== "ringing") {
+        setIncomingCall(null)
+      }
+    }
+
+    const handleStreamError = () => {
+      setCallError("Realtime cuộc gọi đang tự kết nối lại...")
+    }
+
+    source.addEventListener("call", handleCallEvent)
+    source.addEventListener("stream-error", handleStreamError)
+    return () => source.close()
+  }, [activeCallId, currentUser.id, incomingCall?.id])
 
   const startRecording = async () => {
     if (typeof window !== "undefined" && !window.isSecureContext) {
@@ -1955,7 +2112,7 @@ export function MessagesPageClient({ currentUser }) {
                                         <button
                                           type="button"
                                           onClick={async () => {
-                                            for (const message of item.messages) await recallMessage(message)
+                                            await recallMessages(item.messages)
                                             setOpenMessageMenuId(null)
                                           }}
                                           className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-destructive hover:bg-destructive/10"
@@ -1975,9 +2132,36 @@ export function MessagesPageClient({ currentUser }) {
                         const mine = message.sender?.id === currentUser.id
                         const replyPayload = decodeReplyMessage(message.content)
                         const messageContent = unwrapMessageContent(message.content)
-                        const recalled = messageContent === MESSAGE_RECALLED
-                        const media = recalled ? null : decodeMediaMessage(messageContent)
+                        const recalled = isRecalledMessage(messageContent)
+                        const recalledPayload = recalled ? decodeRecalledMessage(messageContent) : null
+                        const callPayload = !recalled ? decodeCallMessage(messageContent) : null
+                        const media = recalled || callPayload ? null : decodeMediaMessage(messageContent)
                         const otherName = selectedConv.otherUser?.displayName || selectedConv.otherUser?.username || "ND"
+                        const senderName = message.sender?.displayName || message.sender?.username || otherName
+                        if (recalled || callPayload) {
+                          const systemText = recalled
+                            ? mine
+                              ? "Bạn đã thu hồi"
+                              : `${recalledPayload?.recalledByName || senderName} đã thu hồi`
+                            : formatCallHistoryMessage(callPayload)
+                          const SystemIcon = recalled ? CheckCheck : callPayload?.status === "declined" ? PhoneOff : Phone
+                          return (
+                            <div
+                              key={message.id}
+                              ref={(node) => {
+                                if (node) messageRefs.current.set(message.id, node)
+                                else messageRefs.current.delete(message.id)
+                              }}
+                              className="flex justify-center px-2 py-1"
+                            >
+                              <div className="flex max-w-[min(86vw,460px)] items-center gap-2 rounded-full bg-muted/85 px-3 py-1.5 text-center text-xs font-semibold text-muted-foreground shadow-sm ring-1 ring-border/60">
+                                <SystemIcon className="h-3.5 w-3.5 shrink-0" />
+                                <span className="min-w-0 break-words">{systemText}</span>
+                                {callPayload && <span className="shrink-0 text-[10px] font-medium opacity-70">{formatTimeAgo(message.createdAt)}</span>}
+                              </div>
+                            </div>
+                          )
+                        }
                         return (
                           <div
                             key={message.id}
@@ -1994,7 +2178,7 @@ export function MessagesPageClient({ currentUser }) {
                               </Avatar>
                             )}
                             <div className={`flex items-center gap-1.5 ${mine ? "flex-row-reverse" : ""}`}>
-                              <div className={`${media?.kind === "image" ? "max-w-[min(76vw,320px)] p-1" : media?.kind === "audio" ? "max-w-[min(76vw,260px)] p-1" : media?.kind === "sticker" ? "max-w-[68vw] px-2 py-1.5" : "max-w-[min(72vw,420px)] px-3 py-2"} rounded-[1.35rem] text-sm leading-5 shadow-sm md:max-w-[62%] ${mine ? "rounded-br-md bg-primary text-primary-foreground" : "rounded-bl-md bg-muted text-foreground"}`}>
+                              <div className={`${media?.kind === "image" ? "max-w-[min(76vw,320px)] p-1" : media?.kind === "audio" ? "w-[min(76vw,260px)] overflow-hidden p-1" : media?.kind === "sticker" ? "max-w-[68vw] px-2 py-1.5" : "max-w-[min(72vw,420px)] px-3 py-2"} rounded-[1.35rem] text-sm leading-5 shadow-sm md:max-w-[62%] ${mine ? "rounded-br-md bg-primary text-primary-foreground" : "rounded-bl-md bg-muted text-foreground"}`}>
                                 {message.isPinned && (
                                   <div className={`mb-1 flex items-center gap-1 text-[10px] font-bold ${mine ? "text-primary-foreground/80" : "text-primary"}`}>
                                     <Pin className="h-3 w-3" />
@@ -2339,7 +2523,18 @@ export function MessagesPageClient({ currentUser }) {
                   <video ref={callVideoRef} autoPlay playsInline muted className="absolute inset-0 h-full w-full object-cover" />
                 )}
                 {remoteStream && (
-                  <video ref={callVideoRef} autoPlay playsInline muted className="absolute bottom-24 right-4 z-10 h-32 w-24 rounded-2xl border border-white/20 object-cover shadow-2xl sm:bottom-28 sm:right-6 sm:h-44 sm:w-32" />
+                  <div
+                    ref={callPreviewRef}
+                    className={`fixed z-10 h-32 w-24 touch-none select-none overflow-hidden rounded-2xl border border-white/20 bg-slate-950 shadow-2xl sm:h-44 sm:w-32 ${callPreviewPosition ? "" : "bottom-24 right-4 sm:bottom-28 sm:right-6"}`}
+                    style={callPreviewPosition ? { left: callPreviewPosition.x, top: callPreviewPosition.y } : undefined}
+                    onPointerDown={startCallPreviewDrag}
+                    onPointerMove={moveCallPreview}
+                    onPointerUp={stopCallPreviewDrag}
+                    onPointerCancel={stopCallPreviewDrag}
+                    role="presentation"
+                  >
+                    <video ref={callVideoRef} autoPlay playsInline muted className="h-full w-full object-cover" />
+                  </div>
                 )}
               </>
             ) : (

@@ -4,6 +4,7 @@ import { error, handleRouteError, json, readJson } from "@/lib/http"
 import { assertSameOrigin } from "@/lib/security"
 
 const MESSAGE_RECALLED = "FISHVIET_RECALLED"
+const MESSAGE_RECALLED_PREFIX = `${MESSAGE_RECALLED}:`
 const messageSenderSelect = { id: true, username: true, displayName: true, avatarUrl: true }
 const messageInclude = {
   sender: { select: messageSenderSelect },
@@ -80,7 +81,7 @@ export async function PATCH(request, { params }) {
       select: { id: true, senderId: true, content: true },
     })
     if (!message) return error("Khong tim thay tin nhan", 404)
-    if (message.content === MESSAGE_RECALLED && action !== "unpin") {
+    if ((message.content === MESSAGE_RECALLED || message.content.startsWith(MESSAGE_RECALLED_PREFIX)) && action !== "unpin") {
       return error("Tin nhan da duoc thu hoi", 400)
     }
 
@@ -104,7 +105,12 @@ export async function PATCH(request, { params }) {
 
     const updated = await db.message.update({
       where: { id: messageId },
-      data: { content: MESSAGE_RECALLED },
+      data: {
+        content: `${MESSAGE_RECALLED_PREFIX}${JSON.stringify({
+          recalledById: user.id,
+          recalledByName: user.displayName || user.username,
+        })}`,
+      },
       include: messageInclude,
     })
     await db.messagePin.deleteMany({ where: { messageId, conversationId } })

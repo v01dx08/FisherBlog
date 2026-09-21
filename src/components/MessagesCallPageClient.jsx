@@ -27,6 +27,10 @@ function formatCallTime(seconds) {
   return `${minutes}:${rest}`
 }
 
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max)
+}
+
 export function MessagesCallPageClient({ currentUser }) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -50,14 +54,17 @@ export function MessagesCallPageClient({ currentUser }) {
   const [ending, setEnding] = useState(false)
   const [booting, setBooting] = useState(true)
   const [callEnded, setCallEnded] = useState(false)
+  const [localPreviewPosition, setLocalPreviewPosition] = useState(null)
 
   const peerRef = useRef(null)
   const localVideoRef = useRef(null)
+  const localPreviewRef = useRef(null)
   const remoteVideoRef = useRef(null)
   const remoteAudioRef = useRef(null)
   const handledSignalIdsRef = useRef(new Set())
   const callIdRef = useRef(callId)
   const endedRef = useRef(false)
+  const localPreviewDragRef = useRef(null)
 
   const otherUser = conversation?.otherUser || {}
   const displayName = otherUser.displayName || otherUser.username || "Cuộc gọi"
@@ -103,6 +110,44 @@ export function MessagesCallPageClient({ currentUser }) {
   useEffect(() => {
     if (localVideoRef.current) localVideoRef.current.srcObject = localStream
   }, [localStream])
+
+  const clampLocalPreviewPosition = useCallback((position) => {
+    if (typeof window === "undefined") return position
+    const rect = localPreviewRef.current?.getBoundingClientRect()
+    const width = rect?.width || 96
+    const height = rect?.height || 128
+    const padding = 12
+    return {
+      x: clamp(position.x, padding, window.innerWidth - width - padding),
+      y: clamp(position.y, padding, window.innerHeight - height - padding),
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!isVideo || !localStream || typeof window === "undefined") return undefined
+
+    const placePreview = () => {
+      const rect = localPreviewRef.current?.getBoundingClientRect()
+      const width = rect?.width || 96
+      const height = rect?.height || 128
+      setLocalPreviewPosition((position) => {
+        if (position) return clampLocalPreviewPosition(position)
+        const bottomOffset = window.matchMedia("(min-width: 640px)").matches ? 144 : 128
+        return clampLocalPreviewPosition({
+          x: window.innerWidth - width - 12,
+          y: window.innerHeight - height - bottomOffset,
+        })
+      })
+    }
+
+    placePreview()
+    window.addEventListener("resize", placePreview)
+    window.visualViewport?.addEventListener("resize", placePreview)
+    return () => {
+      window.removeEventListener("resize", placePreview)
+      window.visualViewport?.removeEventListener("resize", placePreview)
+    }
+  }, [clampLocalPreviewPosition, isVideo, localStream])
 
   useEffect(() => {
     if (remoteVideoRef.current) remoteVideoRef.current.srcObject = remoteStream
@@ -178,7 +223,12 @@ export function MessagesCallPageClient({ currentUser }) {
     if (!signal?.id || handledSignalIdsRef.current.has(signal.id)) return
     handledSignalIdsRef.current.add(signal.id)
     if (signal.type === "accepted") {
-      setStatus("Đã nhận cuộc gọi")
+      setStatus("Đã nhận cuộc gọi, đang kết nối...")
+      const peer = peerRef.current
+      const localDescription = peer?.localDescription
+      if (localDescription?.type === "offer" && callIdRef.current) {
+        await postSignal(callIdRef.current, "offer", localDescription)
+      }
       return
     }
     if (["declined", "ended"].includes(signal.type)) {
@@ -329,6 +379,34 @@ export function MessagesCallPageClient({ currentUser }) {
     })
   }
 
+  const startLocalPreviewDrag = (event) => {
+    if (!localPreviewPosition) return
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+    localPreviewDragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: localPreviewPosition.x,
+      originY: localPreviewPosition.y,
+    }
+  }
+
+  const moveLocalPreview = (event) => {
+    const drag = localPreviewDragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return
+    setLocalPreviewPosition(clampLocalPreviewPosition({
+      x: drag.originX + event.clientX - drag.startX,
+      y: drag.originY + event.clientY - drag.startY,
+    }))
+  }
+
+  const stopLocalPreviewDrag = (event) => {
+    if (localPreviewDragRef.current?.pointerId === event.pointerId) {
+      localPreviewDragRef.current = null
+      event.currentTarget.releasePointerCapture?.(event.pointerId)
+    }
+  }
+
   const callLabel = useMemo(() => {
     if (callEnded) return "Cuộc gọi đã kết thúc"
     if (booting) return "Đang xin quyền thiết bị"
@@ -418,7 +496,18 @@ export function MessagesCallPageClient({ currentUser }) {
         </div>
 
         {isVideo && localStream && (
-          <video ref={localVideoRef} autoPlay muted playsInline className="absolute bottom-32 right-3 z-20 h-32 w-24 rounded-2xl border border-white/15 bg-zinc-950 object-cover shadow-2xl sm:bottom-36 sm:right-6 sm:h-44 sm:w-32" />
+          <div
+            ref={localPreviewRef}
+            className={`absolute z-20 h-32 w-24 touch-none select-none overflow-hidden rounded-2xl border border-white/15 bg-zinc-950 shadow-2xl sm:h-44 sm:w-32 ${localPreviewPosition ? "" : "bottom-32 right-3 sm:bottom-36 sm:right-6"}`}
+            style={localPreviewPosition ? { left: localPreviewPosition.x, top: localPreviewPosition.y } : undefined}
+            onPointerDown={startLocalPreviewDrag}
+            onPointerMove={moveLocalPreview}
+            onPointerUp={stopLocalPreviewDrag}
+            onPointerCancel={stopLocalPreviewDrag}
+            role="presentation"
+          >
+            <video ref={localVideoRef} autoPlay muted playsInline className="h-full w-full object-cover" />
+          </div>
         )}
         <audio ref={remoteAudioRef} autoPlay playsInline />
 
