@@ -260,11 +260,17 @@ export function MessagesCallPageClient({ currentUser }) {
     }
     if (signal.type === "offer") {
       if (peer.currentRemoteDescription) return
+      logCallDebug("handle offer", {
+        signalingState: peer.signalingState,
+        connectionState: peer.connectionState,
+        iceConnectionState: peer.iceConnectionState,
+      })
       await peer.setRemoteDescription(new RTCSessionDescription(signal.payload))
       await flushPendingCandidates()
       const answer = await peer.createAnswer()
       await peer.setLocalDescription(answer)
       await postSignal(callIdRef.current, "answer", answer)
+      logCallDebug("answer sent", { signalingState: peer.signalingState })
       return
     }
     if (signal.type === "answer") {
@@ -379,12 +385,21 @@ export function MessagesCallPageClient({ currentUser }) {
           try {
             await handleSignal(signal)
           } catch (caught) {
-            logCallDebug("signal error", { id: signal.id, type: signal.type, message: caught?.message })
+            const message = caught?.message || "Không thể xử lý tín hiệu cuộc gọi"
+            console.error("[FishViet call] signal error", {
+              id: signal.id,
+              type: signal.type,
+              name: caught?.name,
+              message,
+              stack: caught?.stack,
+            })
+            logCallDebug("signal error", { id: signal.id, type: signal.type, message })
             if (active) setStatus("Đang thử kết nối lại...")
           }
           after = signal.createdAt
         }
-      } catch {
+      } catch (caught) {
+        console.error("[FishViet call] poll error", caught)
         if (active) setStatus("Đang kết nối lại...")
       }
     }
