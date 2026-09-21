@@ -55,6 +55,7 @@ export function MessagesCallPageClient({ currentUser }) {
   const [ending, setEnding] = useState(false)
   const [booting, setBooting] = useState(true)
   const [callEnded, setCallEnded] = useState(false)
+  const [callConnected, setCallConnected] = useState(false)
   const [localPreviewPosition, setLocalPreviewPosition] = useState(null)
 
   const peerRef = useRef(null)
@@ -162,10 +163,10 @@ export function MessagesCallPageClient({ currentUser }) {
   }, [speakerEnabled, remoteStream])
 
   useEffect(() => {
-    if (callEnded) return undefined
+    if (callEnded || !callConnected) return undefined
     const timer = window.setInterval(() => setSeconds((value) => value + 1), 1000)
     return () => window.clearInterval(timer)
-  }, [callEnded])
+  }, [callConnected, callEnded])
 
   const logCallDebug = useCallback((label, detail = {}) => {
     if (!debugCall) return
@@ -219,16 +220,42 @@ export function MessagesCallPageClient({ currentUser }) {
     }
     peer.ontrack = (event) => {
       setRemoteStream(event.streams[0])
-      setStatus("Đã kết nối")
+      if (peer.connectionState !== "connected") setStatus("Đang thiết lập đường truyền...")
     }
     peer.onconnectionstatechange = () => {
-      if (["failed", "disconnected"].includes(peer.connectionState)) setStatus("Đang thử kết nối lại...")
-      if (peer.connectionState === "connected") setStatus("Đã kết nối")
+      logCallDebug("peer connection state", {
+        connectionState: peer.connectionState,
+        iceConnectionState: peer.iceConnectionState,
+        signalingState: peer.signalingState,
+      })
+      if (["failed", "disconnected"].includes(peer.connectionState)) {
+        setCallConnected(false)
+        setStatus("Đang thử kết nối lại...")
+      }
+      if (peer.connectionState === "connected") {
+        setCallConnected(true)
+        setStatus("Đã kết nối")
+      }
       if (peer.connectionState === "closed") setStatus("Cuộc gọi đã kết thúc")
+    }
+    peer.oniceconnectionstatechange = () => {
+      logCallDebug("ice connection state", {
+        iceConnectionState: peer.iceConnectionState,
+        connectionState: peer.connectionState,
+      })
+    }
+    peer.onicecandidateerror = (event) => {
+      console.error("[FishViet call] ice candidate error", {
+        url: event.url,
+        errorCode: event.errorCode,
+        errorText: event.errorText,
+        address: event.address,
+        port: event.port,
+      })
     }
     peerRef.current = peer
     return peer
-  }, [postSignal])
+  }, [logCallDebug, postSignal])
 
   const handleSignal = useCallback(async (signal) => {
     if (!signal?.id || handledSignalIdsRef.current.has(signal.id)) return
@@ -303,6 +330,7 @@ export function MessagesCallPageClient({ currentUser }) {
         setError("")
         setSeconds(0)
         setRemoteStream(null)
+        setCallConnected(false)
         setBooting(true)
         if (!window.isSecureContext) {
           throw new Error("Mobile chỉ cho phép gọi trên HTTPS hoặc localhost.")
@@ -467,9 +495,9 @@ export function MessagesCallPageClient({ currentUser }) {
     if (callEnded) return "Cuộc gọi đã kết thúc"
     if (booting) return "Đang xin quyền thiết bị"
     if (error) return "Không thể kết nối"
-    if (remoteStream) return formatCallTime(seconds)
+    if (callConnected) return formatCallTime(seconds)
     return status
-  }, [booting, callEnded, error, remoteStream, seconds, status])
+  }, [booting, callConnected, callEnded, error, seconds, status])
 
   if (callEnded) {
     return (
