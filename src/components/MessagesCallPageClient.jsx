@@ -59,6 +59,8 @@ export function MessagesCallPageClient({ currentUser }) {
   const [localPreviewPosition, setLocalPreviewPosition] = useState(null)
 
   const peerRef = useRef(null)
+  const localStreamRef = useRef(null)
+  const remoteStreamRef = useRef(null)
   const localVideoRef = useRef(null)
   const localPreviewRef = useRef(null)
   const remoteVideoRef = useRef(null)
@@ -111,6 +113,7 @@ export function MessagesCallPageClient({ currentUser }) {
   }, [conversationId])
 
   useEffect(() => {
+    localStreamRef.current = localStream
     if (localVideoRef.current) localVideoRef.current.srcObject = localStream
   }, [localStream])
 
@@ -153,6 +156,7 @@ export function MessagesCallPageClient({ currentUser }) {
   }, [clampLocalPreviewPosition, isVideo, localStream])
 
   useEffect(() => {
+    remoteStreamRef.current = remoteStream
     if (remoteVideoRef.current) remoteVideoRef.current.srcObject = remoteStream
     if (remoteAudioRef.current) remoteAudioRef.current.srcObject = remoteStream
   }, [remoteStream])
@@ -199,8 +203,10 @@ export function MessagesCallPageClient({ currentUser }) {
     }
     peerRef.current?.close()
     peerRef.current = null
-    stopMediaStream(localStream)
-    stopMediaStream(remoteStream)
+    stopMediaStream(localStreamRef.current)
+    stopMediaStream(remoteStreamRef.current)
+    localStreamRef.current = null
+    remoteStreamRef.current = null
     setLocalStream(null)
     setRemoteStream(null)
     setCallId("")
@@ -208,7 +214,7 @@ export function MessagesCallPageClient({ currentUser }) {
     setBooting(false)
     setEnding(false)
     setCallEnded(true)
-  }, [localStream, remoteStream])
+  }, [])
 
   const createPeer = useCallback((targetCallId, stream) => {
     const peer = new RTCPeerConnection({
@@ -441,9 +447,9 @@ export function MessagesCallPageClient({ currentUser }) {
 
   useEffect(() => () => {
     peerRef.current?.close()
-    stopMediaStream(localStream)
-    stopMediaStream(remoteStream)
-  }, [localStream, remoteStream])
+    stopMediaStream(localStreamRef.current)
+    stopMediaStream(remoteStreamRef.current)
+  }, [])
 
   const toggleMic = () => {
     localStream?.getAudioTracks().forEach((track) => {
