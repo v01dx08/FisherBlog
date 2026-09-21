@@ -39,6 +39,7 @@ export function MessagesCallPageClient({ currentUser }) {
   const requestedMode = searchParams.get("mode") === "video" ? "video" : "audio"
   const restartToken = searchParams.get("restart") || ""
   const incoming = searchParams.get("incoming") === "1"
+  const debugCall = searchParams.get("debug") === "1"
 
   const [conversation, setConversation] = useState(null)
   const [callId, setCallId] = useState(requestedCallId)
@@ -62,6 +63,7 @@ export function MessagesCallPageClient({ currentUser }) {
   const remoteVideoRef = useRef(null)
   const remoteAudioRef = useRef(null)
   const handledSignalIdsRef = useRef(new Set())
+  const pendingCandidatesRef = useRef([])
   const callIdRef = useRef(callId)
   const endedRef = useRef(false)
   const localPreviewDragRef = useRef(null)
@@ -165,13 +167,22 @@ export function MessagesCallPageClient({ currentUser }) {
     return () => window.clearInterval(timer)
   }, [callEnded])
 
+  const logCallDebug = useCallback((label, detail = {}) => {
+    if (!debugCall) return
+    console.info("[FishViet call]", label, detail)
+  }, [debugCall])
+
   const postSignal = useCallback(async (targetCallId, type, payload) => {
-    await fetch(`/api/messages/calls/${targetCallId}/signals`, {
+    const response = await fetch(`/api/messages/calls/${targetCallId}/signals`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ type, payload }),
     })
-  }, [])
+    const data = await response.json().catch(() => null)
+    logCallDebug("post signal", { callId: targetCallId, type, status: response.status, ok: response.ok })
+    if (!response.ok) throw new Error(data?.error || `Không thể gửi tín hiệu ${type}`)
+    return data
+  }, [logCallDebug])
 
   const endCall = useCallback(async ({ notify = true } = {}) => {
     if (endedRef.current) return
@@ -222,6 +233,7 @@ export function MessagesCallPageClient({ currentUser }) {
   const handleSignal = useCallback(async (signal) => {
     if (!signal?.id || handledSignalIdsRef.current.has(signal.id)) return
     handledSignalIdsRef.current.add(signal.id)
+    logCallDebug("receive signal", { id: signal.id, type: signal.type, createdAt: signal.createdAt })
     if (signal.type === "accepted") {
       setStatus("Đã nhận cuộc gọi, đang kết nối...")
       const peer = peerRef.current
@@ -237,9 +249,19 @@ export function MessagesCallPageClient({ currentUser }) {
     }
     const peer = peerRef.current
     if (!peer) return
+    const flushPendingCandidates = async () => {
+      if (!peer.remoteDescription || !pendingCandidatesRef.current.length) return
+      const candidates = pendingCandidatesRef.current
+      pendingCandidatesRef.current = []
+      for (const candidate of candidates) {
+        await peer.addIceCandidate(new RTCIceCandidate(candidate))
+      }
+      logCallDebug("flush candidates", { count: candidates.length })
+    }
     if (signal.type === "offer") {
       if (peer.currentRemoteDescription) return
       await peer.setRemoteDescription(new RTCSessionDescription(signal.payload))
+      await flushPendingCandidates()
       const answer = await peer.createAnswer()
       await peer.setLocalDescription(answer)
       await postSignal(callIdRef.current, "answer", answer)
@@ -248,12 +270,18 @@ export function MessagesCallPageClient({ currentUser }) {
     if (signal.type === "answer") {
       if (peer.currentRemoteDescription) return
       await peer.setRemoteDescription(new RTCSessionDescription(signal.payload))
+      await flushPendingCandidates()
       return
     }
     if (signal.type === "candidate") {
+      if (!peer.remoteDescription) {
+        pendingCandidatesRef.current.push(signal.payload)
+        logCallDebug("queue candidate", { count: pendingCandidatesRef.current.length })
+        return
+      }
       await peer.addIceCandidate(new RTCIceCandidate(signal.payload))
     }
-  }, [endCall, postSignal])
+  }, [endCall, logCallDebug, postSignal])
 
   useEffect(() => {
     if (!conversationId || typeof navigator === "undefined") return undefined
@@ -263,6 +291,7 @@ export function MessagesCallPageClient({ currentUser }) {
       try {
         endedRef.current = false
         handledSignalIdsRef.current = new Set()
+        pendingCandidatesRef.current = []
         setCallEnded(false)
         setEnding(false)
         setError("")
@@ -338,9 +367,21 @@ export function MessagesCallPageClient({ currentUser }) {
         const url = `/api/messages/calls/${callId}/signals${after ? `?after=${encodeURIComponent(after)}` : ""}`
         const response = await fetch(url)
         const data = await response.json()
+        logCallDebug("poll signals", {
+          callId,
+          status: response.status,
+          ok: response.ok,
+          count: Array.isArray(data.items) ? data.items.length : 0,
+          types: Array.isArray(data.items) ? data.items.map((signal) => signal.type) : [],
+        })
         if (!active || !response.ok) return
         for (const signal of data.items || []) {
-          await handleSignal(signal)
+          try {
+            await handleSignal(signal)
+          } catch (caught) {
+            logCallDebug("signal error", { id: signal.id, type: signal.type, message: caught?.message })
+            if (active) setStatus("Đang thử kết nối lại...")
+          }
           after = signal.createdAt
         }
       } catch {
@@ -353,7 +394,7 @@ export function MessagesCallPageClient({ currentUser }) {
       active = false
       window.clearInterval(timer)
     }
-  }, [callEnded, callId, handleSignal])
+  }, [callEnded, callId, handleSignal, logCallDebug])
 
   useEffect(() => () => {
     peerRef.current?.close()
