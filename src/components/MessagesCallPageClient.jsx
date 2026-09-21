@@ -31,6 +31,8 @@ function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max)
 }
 
+const DEFAULT_ICE_SERVERS = [{ urls: ["stun:stun.l.google.com:19302", "stun:global.stun.twilio.com:3478"] }]
+
 export function MessagesCallPageClient({ currentUser }) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -59,6 +61,8 @@ export function MessagesCallPageClient({ currentUser }) {
   const [localPreviewPosition, setLocalPreviewPosition] = useState(null)
 
   const peerRef = useRef(null)
+  const localStreamRef = useRef(null)
+  const remoteStreamRef = useRef(null)
   const localVideoRef = useRef(null)
   const localPreviewRef = useRef(null)
   const remoteVideoRef = useRef(null)
@@ -111,6 +115,7 @@ export function MessagesCallPageClient({ currentUser }) {
   }, [conversationId])
 
   useEffect(() => {
+    localStreamRef.current = localStream
     if (localVideoRef.current) localVideoRef.current.srcObject = localStream
   }, [localStream])
 
@@ -153,6 +158,7 @@ export function MessagesCallPageClient({ currentUser }) {
   }, [clampLocalPreviewPosition, isVideo, localStream])
 
   useEffect(() => {
+    remoteStreamRef.current = remoteStream
     if (remoteVideoRef.current) remoteVideoRef.current.srcObject = remoteStream
     if (remoteAudioRef.current) remoteAudioRef.current.srcObject = remoteStream
   }, [remoteStream])
@@ -185,6 +191,21 @@ export function MessagesCallPageClient({ currentUser }) {
     return data
   }, [logCallDebug])
 
+  const loadIceServers = useCallback(async () => {
+    try {
+      const response = await fetch("/api/messages/calls/ice", { cache: "no-store" })
+      const data = await response.json()
+      if (!response.ok || !Array.isArray(data.iceServers) || !data.iceServers.length) {
+        throw new Error(data?.error || "Không thể lấy cấu hình ICE")
+      }
+      logCallDebug("ice servers loaded", { hasTurn: Boolean(data.hasTurn), count: data.iceServers.length })
+      return data.iceServers
+    } catch (caught) {
+      console.warn("[FishViet call] using fallback ICE servers", caught)
+      return DEFAULT_ICE_SERVERS
+    }
+  }, [logCallDebug])
+
   const endCall = useCallback(async ({ notify = true } = {}) => {
     if (endedRef.current) return
     endedRef.current = true
@@ -199,8 +220,10 @@ export function MessagesCallPageClient({ currentUser }) {
     }
     peerRef.current?.close()
     peerRef.current = null
-    stopMediaStream(localStream)
-    stopMediaStream(remoteStream)
+    stopMediaStream(localStreamRef.current)
+    stopMediaStream(remoteStreamRef.current)
+    localStreamRef.current = null
+    remoteStreamRef.current = null
     setLocalStream(null)
     setRemoteStream(null)
     setCallId("")
@@ -208,12 +231,10 @@ export function MessagesCallPageClient({ currentUser }) {
     setBooting(false)
     setEnding(false)
     setCallEnded(true)
-  }, [localStream, remoteStream])
+  }, [])
 
-  const createPeer = useCallback((targetCallId, stream) => {
-    const peer = new RTCPeerConnection({
-      iceServers: [{ urls: ["stun:stun.l.google.com:19302", "stun:global.stun.twilio.com:3478"] }],
-    })
+  const createPeer = useCallback((targetCallId, stream, iceServers = DEFAULT_ICE_SERVERS) => {
+    const peer = new RTCPeerConnection({ iceServers })
     stream.getTracks().forEach((track) => peer.addTrack(track, stream))
     peer.onicecandidate = (event) => {
       if (event.candidate) postSignal(targetCallId, "candidate", event.candidate.toJSON()).catch(() => {})
@@ -348,11 +369,12 @@ export function MessagesCallPageClient({ currentUser }) {
         }
         setLocalStream(stream)
         setCameraEnabled(requestedMode === "video")
+        const iceServers = await loadIceServers()
 
         if (requestedCallId) {
           setCallId(requestedCallId)
           setMode(requestedMode)
-          createPeer(requestedCallId, stream)
+          createPeer(requestedCallId, stream, iceServers)
           if (incoming) {
             await fetch(`/api/messages/calls/${requestedCallId}`, {
               method: "PATCH",
@@ -374,7 +396,7 @@ export function MessagesCallPageClient({ currentUser }) {
         if (cancelled) return
         setCallId(session.id)
         setMode(session.mode)
-        const peer = createPeer(session.id, stream)
+        const peer = createPeer(session.id, stream, iceServers)
         const offer = await peer.createOffer()
         await peer.setLocalDescription(offer)
         await postSignal(session.id, "offer", offer)
@@ -390,7 +412,7 @@ export function MessagesCallPageClient({ currentUser }) {
     return () => {
       cancelled = true
     }
-  }, [conversationId, createPeer, incoming, postSignal, requestedCallId, requestedMode, restartToken])
+  }, [conversationId, createPeer, incoming, loadIceServers, postSignal, requestedCallId, requestedMode, restartToken])
 
   useEffect(() => {
     if (!callId || callEnded) return undefined
@@ -441,9 +463,9 @@ export function MessagesCallPageClient({ currentUser }) {
 
   useEffect(() => () => {
     peerRef.current?.close()
-    stopMediaStream(localStream)
-    stopMediaStream(remoteStream)
-  }, [localStream, remoteStream])
+    stopMediaStream(localStreamRef.current)
+    stopMediaStream(remoteStreamRef.current)
+  }, [])
 
   const toggleMic = () => {
     localStream?.getAudioTracks().forEach((track) => {
