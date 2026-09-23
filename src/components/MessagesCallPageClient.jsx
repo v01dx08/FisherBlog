@@ -31,6 +31,10 @@ function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max)
 }
 
+function isValidPreviewPosition(position) {
+  return Number.isFinite(position?.x) && Number.isFinite(position?.y)
+}
+
 const DEFAULT_ICE_SERVERS = [{ urls: ["stun:stun.l.google.com:19302", "stun:global.stun.twilio.com:3478"] }]
 
 export function MessagesCallPageClient({ currentUser }) {
@@ -59,6 +63,7 @@ export function MessagesCallPageClient({ currentUser }) {
   const [callEnded, setCallEnded] = useState(false)
   const [callConnected, setCallConnected] = useState(false)
   const [localPreviewPosition, setLocalPreviewPosition] = useState(null)
+  const [cameraSwitching, setCameraSwitching] = useState(false)
 
   const peerRef = useRef(null)
   const localStreamRef = useRef(null)
@@ -69,6 +74,7 @@ export function MessagesCallPageClient({ currentUser }) {
   const remoteAudioRef = useRef(null)
   const handledSignalIdsRef = useRef(new Set())
   const pendingCandidatesRef = useRef([])
+  const lastRemoteOfferSdpRef = useRef("")
   const callIdRef = useRef(callId)
   const endedRef = useRef(false)
   const localPreviewDragRef = useRef(null)
@@ -77,6 +83,9 @@ export function MessagesCallPageClient({ currentUser }) {
   const displayName = otherUser.displayName || otherUser.username || "Cuộc gọi"
   const initials = displayName.slice(0, 2).toUpperCase()
   const isVideo = mode === "video"
+  const hasLocalVideo = Boolean(localStream?.getVideoTracks().length)
+  const hasRemoteVideo = Boolean(remoteStream?.getVideoTracks().length)
+  const hasVideoSurface = isVideo || hasLocalVideo || hasRemoteVideo
   const controlsDisabled = booting || Boolean(error) || !localStream
 
   const closeCall = useCallback(() => {
@@ -125,9 +134,11 @@ export function MessagesCallPageClient({ currentUser }) {
     const width = rect?.width || 96
     const height = rect?.height || 128
     const padding = 12
+    const maxX = Math.max(padding, window.innerWidth - width - padding)
+    const maxY = Math.max(padding, window.innerHeight - height - padding)
     return {
-      x: clamp(position.x, padding, window.innerWidth - width - padding),
-      y: clamp(position.y, padding, window.innerHeight - height - padding),
+      x: clamp(Number(position.x) || padding, padding, maxX),
+      y: clamp(Number(position.y) || padding, padding, maxY),
     }
   }, [])
 
@@ -161,7 +172,7 @@ export function MessagesCallPageClient({ currentUser }) {
     remoteStreamRef.current = remoteStream
     if (remoteVideoRef.current) remoteVideoRef.current.srcObject = remoteStream
     if (remoteAudioRef.current) remoteAudioRef.current.srcObject = remoteStream
-  }, [remoteStream])
+  }, [hasRemoteVideo, remoteStream])
 
   useEffect(() => {
     if (remoteAudioRef.current) remoteAudioRef.current.muted = !speakerEnabled
@@ -190,6 +201,20 @@ export function MessagesCallPageClient({ currentUser }) {
     if (!response.ok) throw new Error(data?.error || `Không thể gửi tín hiệu ${type}`)
     return data
   }, [logCallDebug])
+
+  const renegotiatePeer = useCallback(async () => {
+    const peer = peerRef.current
+    const activeCallId = callIdRef.current
+    if (!peer || !activeCallId || peer.signalingState === "closed") return
+    if (peer.signalingState !== "stable") {
+      logCallDebug("skip renegotiate", { signalingState: peer.signalingState })
+      return
+    }
+    const offer = await peer.createOffer()
+    await peer.setLocalDescription(offer)
+    await postSignal(activeCallId, "offer", offer)
+    logCallDebug("renegotiate offer sent", { signalingState: peer.signalingState })
+  }, [logCallDebug, postSignal])
 
   const loadIceServers = useCallback(async () => {
     try {
@@ -224,8 +249,11 @@ export function MessagesCallPageClient({ currentUser }) {
     stopMediaStream(remoteStreamRef.current)
     localStreamRef.current = null
     remoteStreamRef.current = null
+    pendingCandidatesRef.current = []
+    lastRemoteOfferSdpRef.current = ""
     setLocalStream(null)
     setRemoteStream(null)
+    setLocalPreviewPosition(null)
     setCallId("")
     setStatus("Cuộc gọi đã kết thúc")
     setBooting(false)
@@ -241,6 +269,7 @@ export function MessagesCallPageClient({ currentUser }) {
     }
     peer.ontrack = (event) => {
       setRemoteStream(event.streams[0])
+      if (event.track?.kind === "video") setMode("video")
       if (peer.connectionState !== "connected") setStatus("Đang thiết lập đường truyền...")
     }
     peer.onconnectionstatechange = () => {
@@ -307,13 +336,20 @@ export function MessagesCallPageClient({ currentUser }) {
       logCallDebug("flush candidates", { count: candidates.length })
     }
     if (signal.type === "offer") {
-      if (peer.currentRemoteDescription) return
+      const offerSdp = signal.payload?.sdp || ""
+      if (offerSdp && offerSdp === lastRemoteOfferSdpRef.current) return
+      if (peer.signalingState === "closed") return
+      if (peer.signalingState !== "stable") {
+        logCallDebug("skip offer while unstable", { signalingState: peer.signalingState })
+        return
+      }
       logCallDebug("handle offer", {
         signalingState: peer.signalingState,
         connectionState: peer.connectionState,
         iceConnectionState: peer.iceConnectionState,
       })
       await peer.setRemoteDescription(new RTCSessionDescription(signal.payload))
+      lastRemoteOfferSdpRef.current = offerSdp
       await flushPendingCandidates()
       const answer = await peer.createAnswer()
       await peer.setLocalDescription(answer)
@@ -322,7 +358,7 @@ export function MessagesCallPageClient({ currentUser }) {
       return
     }
     if (signal.type === "answer") {
-      if (peer.currentRemoteDescription) return
+      if (peer.signalingState !== "have-local-offer" && peer.currentRemoteDescription) return
       await peer.setRemoteDescription(new RTCSessionDescription(signal.payload))
       await flushPendingCandidates()
       return
@@ -346,11 +382,13 @@ export function MessagesCallPageClient({ currentUser }) {
         endedRef.current = false
         handledSignalIdsRef.current = new Set()
         pendingCandidatesRef.current = []
+        lastRemoteOfferSdpRef.current = ""
         setCallEnded(false)
         setEnding(false)
         setError("")
         setSeconds(0)
         setRemoteStream(null)
+        setLocalPreviewPosition(null)
         setCallConnected(false)
         setBooting(true)
         if (!window.isSecureContext) {
@@ -478,11 +516,40 @@ export function MessagesCallPageClient({ currentUser }) {
     setSpeakerEnabled((enabled) => !enabled)
   }
 
-  const toggleCamera = () => {
-    localStream?.getVideoTracks().forEach((track) => {
-      track.enabled = !track.enabled
-      setCameraEnabled(track.enabled)
-    })
+  const toggleCamera = async () => {
+    if (!localStream || cameraSwitching) return
+    setCameraSwitching(true)
+    try {
+      const existingVideoTrack = localStream.getVideoTracks()[0]
+      if (existingVideoTrack) {
+        existingVideoTrack.enabled = !existingVideoTrack.enabled
+        setCameraEnabled(existingVideoTrack.enabled)
+        if (existingVideoTrack.enabled) setMode("video")
+        return
+      }
+
+      const cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false })
+      const videoTrack = cameraStream.getVideoTracks()[0]
+      if (!videoTrack) throw new Error("Không thể mở camera.")
+
+      localStream.addTrack(videoTrack)
+      localStreamRef.current = localStream
+      const peer = peerRef.current
+      const videoSender = peer?.getSenders().find((sender) => sender.track?.kind === "video")
+      if (videoSender) {
+        await videoSender.replaceTrack(videoTrack)
+      } else {
+        peer?.addTrack(videoTrack, localStream)
+      }
+      setMode("video")
+      setCameraEnabled(true)
+      setLocalStream(new MediaStream(localStream.getTracks()))
+      await renegotiatePeer()
+    } catch (caught) {
+      setError(caught?.message || "Không thể bật camera.")
+    } finally {
+      setCameraSwitching(false)
+    }
   }
 
   const startLocalPreviewDrag = (event) => {
@@ -520,6 +587,7 @@ export function MessagesCallPageClient({ currentUser }) {
     if (callConnected) return formatCallTime(seconds)
     return status
   }, [booting, callConnected, callEnded, error, seconds, status])
+  const hasLocalPreviewPosition = isValidPreviewPosition(localPreviewPosition)
 
   if (callEnded) {
     return (
@@ -554,7 +622,7 @@ export function MessagesCallPageClient({ currentUser }) {
   return (
     <main className="min-h-[100dvh] overflow-hidden bg-black text-white">
       <section className="relative flex min-h-[100dvh] flex-col overflow-hidden bg-black">
-        {isVideo && remoteStream && (
+        {hasVideoSurface && hasRemoteVideo && remoteStream && (
           <video ref={remoteVideoRef} autoPlay playsInline className="absolute inset-0 h-full w-full bg-black object-cover" />
         )}
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(39,39,42,0.45),rgba(0,0,0,0.95)_68%)]" />
@@ -575,14 +643,14 @@ export function MessagesCallPageClient({ currentUser }) {
             </Avatar>
             <div className="min-w-0">
               <h1 className="truncate text-sm font-bold sm:text-base">{displayName}</h1>
-              <p className="truncate text-xs font-semibold text-white/55">{isVideo ? "Video call" : "Voice call"}</p>
+              <p className="truncate text-xs font-semibold text-white/55">{hasVideoSurface ? "Video call" : "Voice call"}</p>
             </div>
           </div>
         </header>
 
         <div className="relative z-10 flex min-h-0 flex-1 items-center justify-center px-4 pb-36 pt-6 text-center sm:pb-40">
           <div className="flex max-w-md flex-col items-center">
-            {(!isVideo || !remoteStream) && (
+            {(!hasVideoSurface || !hasRemoteVideo) && (
               <Avatar className="h-32 w-32 ring-4 ring-white/10 shadow-2xl sm:h-40 sm:w-40">
                 {otherUser.avatarUrl && <AvatarImage src={otherUser.avatarUrl} alt={displayName} className="object-cover" />}
                 <AvatarFallback className="bg-zinc-800 text-4xl font-black text-white">{initials}</AvatarFallback>
@@ -601,11 +669,11 @@ export function MessagesCallPageClient({ currentUser }) {
           </div>
         </div>
 
-        {isVideo && localStream && (
+        {hasVideoSurface && hasLocalVideo && localStream && (
           <div
             ref={localPreviewRef}
-            className={`absolute z-20 h-32 w-24 touch-none select-none overflow-hidden rounded-2xl border border-white/15 bg-zinc-950 shadow-2xl sm:h-44 sm:w-32 ${localPreviewPosition ? "" : "bottom-32 right-3 sm:bottom-36 sm:right-6"}`}
-            style={localPreviewPosition ? { left: localPreviewPosition.x, top: localPreviewPosition.y } : undefined}
+            className={`absolute z-20 h-32 w-24 touch-none select-none overflow-hidden rounded-2xl border border-white/15 bg-zinc-950 shadow-2xl sm:h-44 sm:w-32 ${hasLocalPreviewPosition ? "" : "bottom-32 right-3 sm:bottom-36 sm:right-6"}`}
+            style={hasLocalPreviewPosition ? { left: localPreviewPosition.x, top: localPreviewPosition.y } : undefined}
             onPointerDown={startLocalPreviewDrag}
             onPointerMove={moveLocalPreview}
             onPointerUp={stopLocalPreviewDrag}
@@ -619,9 +687,9 @@ export function MessagesCallPageClient({ currentUser }) {
 
         <footer className="absolute inset-x-0 bottom-0 z-30 flex justify-center px-3 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
           <div className="scrollbar-none flex max-w-[calc(100vw-1.5rem)] items-center justify-center gap-2 overflow-x-auto rounded-full bg-zinc-950/75 px-3 py-3 shadow-2xl ring-1 ring-white/10 backdrop-blur-md sm:gap-3 sm:px-4">
-            {isVideo && (
-              <button type="button" onClick={toggleCamera} disabled={controlsDisabled} className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full transition disabled:opacity-45 ${cameraEnabled ? "bg-zinc-700 text-white hover:bg-zinc-600" : "bg-white text-black hover:bg-zinc-200"}`} aria-label={cameraEnabled ? "Tắt camera" : "Bật camera"}>
-                {cameraEnabled ? <Camera className="h-5 w-5" /> : <CameraOff className="h-5 w-5" />}
+            {localStream && (
+              <button type="button" onClick={toggleCamera} disabled={controlsDisabled || cameraSwitching} className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full transition disabled:opacity-45 ${cameraEnabled && hasLocalVideo ? "bg-zinc-700 text-white hover:bg-zinc-600" : "bg-white text-black hover:bg-zinc-200"}`} aria-label={cameraEnabled && hasLocalVideo ? "Tắt camera" : "Bật camera"}>
+                {cameraSwitching ? <Loader2 className="h-5 w-5 animate-spin" /> : cameraEnabled && hasLocalVideo ? <Camera className="h-5 w-5" /> : <CameraOff className="h-5 w-5" />}
               </button>
             )}
             <button type="button" onClick={toggleSpeaker} disabled={controlsDisabled || !remoteStream} className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full transition disabled:opacity-45 ${speakerEnabled ? "bg-zinc-700 text-white hover:bg-zinc-600" : "bg-white text-black hover:bg-zinc-200"}`} aria-label={speakerEnabled ? "Tắt loa" : "Bật loa"}>
