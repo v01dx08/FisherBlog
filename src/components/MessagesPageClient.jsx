@@ -277,7 +277,7 @@ function scheduleRingtonePhrase(audioContext, output) {
     oscillator.type = "sine"
     oscillator.frequency.setValueAtTime(note.frequency, startAt)
     gain.gain.setValueAtTime(0.0001, startAt)
-    gain.gain.exponentialRampToValueAtTime(0.08, startAt + 0.025)
+    gain.gain.exponentialRampToValueAtTime(0.18, startAt + 0.025)
     gain.gain.exponentialRampToValueAtTime(0.0001, endAt)
     oscillator.connect(gain)
     gain.connect(output)
@@ -622,7 +622,7 @@ export function MessagesPageClient({ currentUser }) {
     try {
       const audioContext = new AudioContextConstructor()
       const output = audioContext.createGain()
-      output.gain.value = 0.85
+      output.gain.value = 1
       output.connect(audioContext.destination)
       ringtoneAudioContextRef.current = audioContext
       ringtoneGainRef.current = output
