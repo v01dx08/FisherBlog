@@ -11,6 +11,12 @@ const MESSAGE_REPLY_PREFIX = "FISHVIET_REPLY:"
 const MESSAGE_RECALLED = "FISHVIET_RECALLED"
 const MESSAGE_RECALLED_PREFIX = `${MESSAGE_RECALLED}:`
 const MESSAGE_CALL_PREFIX = "FISHVIET_CALL:"
+const RINGTONE_INTERVAL_MS = 1800
+const RINGTONE_NOTES = [
+  { frequency: 880, offset: 0, duration: 0.2 },
+  { frequency: 1175, offset: 0.24, duration: 0.2 },
+  { frequency: 988, offset: 0.48, duration: 0.28 },
+]
 const emojiCategories = [
   {
     id: "smileys",
@@ -260,6 +266,27 @@ function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max)
 }
 
+function scheduleRingtonePhrase(audioContext, output) {
+  const startedAt = audioContext.currentTime
+  return RINGTONE_NOTES.map((note) => {
+    const oscillator = audioContext.createOscillator()
+    const gain = audioContext.createGain()
+    const startAt = startedAt + note.offset
+    const endAt = startAt + note.duration
+
+    oscillator.type = "sine"
+    oscillator.frequency.setValueAtTime(note.frequency, startAt)
+    gain.gain.setValueAtTime(0.0001, startAt)
+    gain.gain.exponentialRampToValueAtTime(0.08, startAt + 0.025)
+    gain.gain.exponentialRampToValueAtTime(0.0001, endAt)
+    oscillator.connect(gain)
+    gain.connect(output)
+    oscillator.start(startAt)
+    oscillator.stop(endAt + 0.03)
+    return oscillator
+  })
+}
+
 function supportedAudioMimeType() {
   if (typeof MediaRecorder === "undefined" || !MediaRecorder.isTypeSupported) return ""
   return [
@@ -467,6 +494,7 @@ export function MessagesPageClient({ currentUser }) {
   const [callError, setCallError] = useState("")
   const [incomingCall, setIncomingCall] = useState(null)
   const [incomingActionLoading, setIncomingActionLoading] = useState(false)
+  const [incomingRingtoneMuted, setIncomingRingtoneMuted] = useState(false)
   const [remoteStream, setRemoteStream] = useState(null)
   const messagesEndRef = useRef(null)
   const imageInputRef = useRef(null)
@@ -486,6 +514,11 @@ export function MessagesPageClient({ currentUser }) {
   const audioChunksRef = useRef([])
   const requestedConversationHandledRef = useRef(false)
   const lastTypingSentAtRef = useRef(0)
+  const incomingCallIdRef = useRef("")
+  const ringtoneAudioContextRef = useRef(null)
+  const ringtoneGainRef = useRef(null)
+  const ringtoneTimerRef = useRef(null)
+  const ringtoneOscillatorsRef = useRef([])
 
   const selectedConv = useMemo(
     () => conversations.find((conversation) => conversation.id === selectedConvId) || null,
@@ -558,6 +591,58 @@ export function MessagesPageClient({ currentUser }) {
       y: clamp(position.y, padding, window.innerHeight - height - padding),
     }
   }, [])
+
+  const stopIncomingRingtone = useCallback(() => {
+    if (ringtoneTimerRef.current) {
+      window.clearInterval(ringtoneTimerRef.current)
+      ringtoneTimerRef.current = null
+    }
+    ringtoneOscillatorsRef.current.forEach((oscillator) => {
+      try {
+        oscillator.stop()
+      } catch {}
+    })
+    ringtoneOscillatorsRef.current = []
+    try {
+      ringtoneGainRef.current?.disconnect()
+    } catch {}
+    ringtoneGainRef.current = null
+    const audioContext = ringtoneAudioContextRef.current
+    ringtoneAudioContextRef.current = null
+    if (audioContext && audioContext.state !== "closed") {
+      audioContext.close().catch(() => {})
+    }
+  }, [])
+
+  const startIncomingRingtone = useCallback(async () => {
+    if (typeof window === "undefined" || ringtoneTimerRef.current) return
+    const AudioContextConstructor = window.AudioContext || window.webkitAudioContext
+    if (!AudioContextConstructor) return
+
+    try {
+      const audioContext = new AudioContextConstructor()
+      const output = audioContext.createGain()
+      output.gain.value = 0.85
+      output.connect(audioContext.destination)
+      ringtoneAudioContextRef.current = audioContext
+      ringtoneGainRef.current = output
+
+      if (audioContext.state === "suspended") {
+        await audioContext.resume()
+      }
+      const playPhrase = () => {
+        ringtoneOscillatorsRef.current.push(...scheduleRingtonePhrase(audioContext, output))
+        if (ringtoneOscillatorsRef.current.length > RINGTONE_NOTES.length * 4) {
+          ringtoneOscillatorsRef.current.splice(0, RINGTONE_NOTES.length)
+        }
+      }
+
+      playPhrase()
+      ringtoneTimerRef.current = window.setInterval(playPhrase, RINGTONE_INTERVAL_MS)
+    } catch {
+      stopIncomingRingtone()
+    }
+  }, [stopIncomingRingtone])
 
   useEffect(() => {
     let active = true
@@ -669,6 +754,23 @@ export function MessagesPageClient({ currentUser }) {
   }, [recording])
 
   useEffect(() => {
+    const incomingCallId = incomingCall?.id || ""
+    if (incomingCallId && incomingCallIdRef.current !== incomingCallId) {
+      setIncomingRingtoneMuted(false)
+    }
+    incomingCallIdRef.current = incomingCallId
+  }, [incomingCall?.id])
+
+  useEffect(() => {
+    if (incomingCall && !callState && !incomingRingtoneMuted) {
+      startIncomingRingtone()
+      return stopIncomingRingtone
+    }
+    stopIncomingRingtone()
+    return undefined
+  }, [callState, incomingCall, incomingRingtoneMuted, startIncomingRingtone, stopIncomingRingtone])
+
+  useEffect(() => {
     if (!callState?.stream) return undefined
     if (callVideoRef.current) callVideoRef.current.srcObject = callState.stream
     const timer = window.setInterval(() => setCallSeconds((seconds) => seconds + 1), 1000)
@@ -713,7 +815,8 @@ export function MessagesPageClient({ currentUser }) {
   useEffect(() => () => {
     peerConnectionRef.current?.close()
     stopMediaStream(callStreamRef.current)
-  }, [])
+    stopIncomingRingtone()
+  }, [stopIncomingRingtone])
 
   useEffect(() => {
     if (!currentUser?.id || typeof document === "undefined") return undefined
@@ -1242,6 +1345,7 @@ export function MessagesPageClient({ currentUser }) {
   const acceptIncomingCall = () => {
     const callConversationId = incomingCall?.conversationId || selectedConvId
     if (!incomingCall || incomingActionLoading || !callConversationId) return
+    stopIncomingRingtone()
     setSelectedConvId(callConversationId)
     openCallScreen(`/messages/call?conversationId=${encodeURIComponent(callConversationId)}&callId=${encodeURIComponent(incomingCall.id)}&mode=${encodeURIComponent(incomingCall.mode)}&incoming=1`)
     setIncomingCall(null)
@@ -1249,6 +1353,7 @@ export function MessagesPageClient({ currentUser }) {
 
   const declineIncomingCall = async () => {
     if (!incomingCall || incomingActionLoading) return
+    stopIncomingRingtone()
     setIncomingActionLoading(true)
     try {
       await fetch(`/api/messages/calls/${incomingCall.id}`, {
@@ -2494,6 +2599,15 @@ export function MessagesPageClient({ currentUser }) {
             </Avatar>
             <p className="mt-4 text-lg font-black">{incomingCall.caller?.displayName || incomingCall.caller?.username || "Người dùng"}</p>
             <p className="mt-1 text-sm text-muted-foreground">{incomingCall.mode === "video" ? "Đang gọi video..." : "Đang gọi thoại..."}</p>
+            <button
+              type="button"
+              onClick={() => setIncomingRingtoneMuted((muted) => !muted)}
+              className="mx-auto mt-4 inline-flex h-9 items-center gap-2 rounded-full bg-muted px-3 text-xs font-bold text-muted-foreground transition hover:bg-muted/80 hover:text-foreground"
+              aria-label={incomingRingtoneMuted ? "Bật nhạc chuông" : "Tắt nhạc chuông"}
+            >
+              {incomingRingtoneMuted ? <BellOff className="h-4 w-4" /> : <Bell className="h-4 w-4" />}
+              <span>{incomingRingtoneMuted ? "Bật chuông" : "Tắt chuông"}</span>
+            </button>
             <div className="mt-5 flex items-start justify-center gap-8">
               <button type="button" onClick={declineIncomingCall} disabled={incomingActionLoading} className="kinetic flex flex-col items-center gap-2 text-xs font-bold text-muted-foreground disabled:opacity-50" aria-label="Từ chối cuộc gọi">
                 <span className="flex h-16 w-16 items-center justify-center rounded-full bg-red-500 text-white shadow-lg hover:bg-red-600">
